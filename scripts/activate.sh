@@ -44,9 +44,8 @@ echo "Serial: $SERIAL"
 echo "PIN: ${PIN:0:4}****"
 echo ""
 
-# Call the activation API
-RESPONSE=$(wget -q -O - --header="Content-Type: application/json" \
-    --post-data="{\"pin\":\"${PIN}\",\"box_mac_address\":\"${MAC_ADDRESS}\",\"device_model\":\"${MODEL}\",\"serial\":\"${SERIAL}\"}" \
+# Call the activation API - using BusyBox compatible wget parameters
+RESPONSE=$(wget -q -O - --post-data="{\"pin\":\"${PIN}\",\"box_mac_address\":\"${MAC_ADDRESS}\",\"device_model\":\"${MODEL}\",\"serial\":\"${SERIAL}\"}" \
     ${SERVER_URL}${API_ENDPOINT})
 
 # Check if wget command was successful

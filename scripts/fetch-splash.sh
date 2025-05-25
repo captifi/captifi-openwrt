@@ -22,9 +22,11 @@ API_KEY=$(cat "$INSTALL_DIR/api_key")
 
 echo "Fetching splash page from CaptiFi..."
 
-# Fetch the splash page
-wget -q -O ${OUTPUT_FILE} --header="Authorization: ${API_KEY}" \
-     "${SERVER_URL}${API_ENDPOINT}"
+# Fetch the splash page - BusyBox compatible wget
+# Note: Without header support, we need to ensure the API accepts the key in the URL
+# Create URL with API key as query parameter
+FETCH_URL="${SERVER_URL}${API_ENDPOINT}?api_key=${API_KEY}"
+wget -q -O ${OUTPUT_FILE} "${FETCH_URL}"
 
 # Check if wget command was successful
 if [ $? -ne 0 ]; then

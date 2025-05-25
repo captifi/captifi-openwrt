@@ -85,9 +85,12 @@ JSON_PAYLOAD="{\"api_key\":\"${API_KEY}\",\"mac_address\":\"${MAC_ADDRESS}\",\"g
 
 # Send data to CaptiFi API
 log "Sending guest data to CaptiFi API"
-RESPONSE=$(wget -q -O - --header="Content-Type: application/json" \
-  --post-data="$JSON_PAYLOAD" \
-  ${SERVER_URL}${API_ENDPOINT})
+# Create temporary file for response
+RESP_FILE="/tmp/captifi_auth_response.txt"
+wget -q -O "$RESP_FILE" --post-data="$JSON_PAYLOAD" \
+  ${SERVER_URL}${API_ENDPOINT}
+RESPONSE=$(cat "$RESP_FILE" 2>/dev/null)
+rm -f "$RESP_FILE"
 
 # Check if wget command was successful
 if [ $? -ne 0 ]; then

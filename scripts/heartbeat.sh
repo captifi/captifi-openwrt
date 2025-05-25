@@ -58,23 +58,23 @@ REQUEST_PAYLOAD="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_
 log "Request payload: $REQUEST_PAYLOAD"
 
 # Create a temporary file for response
-RESP_FILE=$(mktemp)
+RESP_FILE="/tmp/captifi_heartbeat_response.txt"
 
-# Send request with detailed output
-wget -v -O "$RESP_FILE" --header="Content-Type: application/json" \
-    --post-data="$REQUEST_PAYLOAD" \
+# Send request with BusyBox compatible wget
+log "Sending heartbeat request..."
+wget -q -O "$RESP_FILE" --post-data="$REQUEST_PAYLOAD" \
     ${SERVER_URL}${API_ENDPOINT} 2>> "$LOG_FILE"
 
 # Check if wget command was successful
 WGET_STATUS=$?
 if [ $WGET_STATUS -ne 0 ]; then
   log "Error: Failed to connect to CaptiFi server. wget exit code: $WGET_STATUS"
-  log "Command: wget --header=\"Content-Type: application/json\" --post-data=<payload> ${SERVER_URL}${API_ENDPOINT}"
+  log "Command: wget -q -O $RESP_FILE --post-data=[payload] ${SERVER_URL}${API_ENDPOINT}"
   exit 1
 fi
 
 # Read response from temp file
-RESPONSE=$(cat "$RESP_FILE")
+RESPONSE=$(cat "$RESP_FILE" 2>/dev/null)
 log "Response received: $RESPONSE"
 rm -f "$RESP_FILE"
 
