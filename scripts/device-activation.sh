@@ -8,7 +8,7 @@
 set -e
 
 # Configuration
-API_URL="https://app.captifi.io/api"  # Change this to your CaptiFi API URL
+API_URL="https://api.captifi.io/api"  # Change this to your CaptiFi API URL
 CONFIG_DIR="/etc/captifi"
 LOGS_DIR="/tmp"
 LOG_FILE="$LOGS_DIR/captifi_activation.log"
@@ -142,7 +142,7 @@ if echo "$RESPONSE" | grep -q "\"success\":true"; then
 # and processes any commands received in response
 
 # Configuration
-API_URL="https://app.captifi.io/api"  # Change this to your CaptiFi API URL
+API_URL="https://api.captifi.io/api"  # Change this to your CaptiFi API URL
 CONFIG_DIR="/etc/captifi"
 LOGS_DIR="/tmp"
 LOG_FILE="$LOGS_DIR/captifi_heartbeat.log"

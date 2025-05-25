@@ -5,7 +5,7 @@
 # V2.2 - Added multi-interface WiFi management capabilities
 
 INSTALL_DIR="/etc/captifi"
-SERVER_URL="https://app.captifi.io"
+SERVER_URL="https://api.captifi.io"
 API_ENDPOINT="/api/plug-and-play/heartbeat"
 LOG_FILE="/tmp/captifi_heartbeat.log"
 MAX_RETRIES=3
