@@ -122,11 +122,34 @@ cat << 'EOF' > /etc/crontabs/root
 */5 * * * * $SCRIPTS_DIR/heartbeat.sh
 EOF
 
+# Create a default rule to block internet access for unauthenticated users
+echo "Setting up firewall to block internet access until authenticated..."
+cat << 'EOF' > /tmp/captifi_internet_block.rule
+config rule
+        option name 'CaptiFi-Block-Internet'
+        option src 'lan'
+        option dest 'wan'
+        option proto 'all'
+        option target 'REJECT'
+        option extra '--reject-with icmp-port-unreachable'
+EOF
+
+# Add the internet blocking rule to the firewall config
+cat /tmp/captifi_internet_block.rule >> /etc/config/firewall
+rm /tmp/captifi_internet_block.rule
+/etc/init.d/firewall restart
+
 # Enable and start services
+echo "Starting services..."
 /etc/init.d/nodogsplash enable
 /etc/init.d/nodogsplash start
 /etc/init.d/cron enable
 /etc/init.d/cron start
+
+echo "Setting up captive portal detection..."
+# Force captive portal detection by routing to CaptiFi site
+route add -host captive.apple.com gw 192.168.2.1
+route add -host connectivitycheck.gstatic.com gw 192.168.2.1
 
 # Copy PIN registration CGI script to cgi-bin directory
 echo "Setting up PIN registration handler..."

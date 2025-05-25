@@ -69,6 +69,19 @@ ACTIVATION_SUCCESS=$?
 
 # Check if activation was successful
 if [ $ACTIVATION_SUCCESS -eq 0 ]; then
+    # Get the client's MAC address from REMOTE_ADDR or HTTP_X_FORWARDED_FOR
+    CLIENT_IP=${REMOTE_ADDR:-$HTTP_X_FORWARDED_FOR}
+    CLIENT_MAC=$(arp -n | grep "$CLIENT_IP" | awk '{print $3}')
+    
+    # Allow this client internet access by adding to Nodogsplash's allowlist
+    if [ -n "$CLIENT_MAC" ]; then
+        echo "Authorizing MAC address: $CLIENT_MAC" >> /tmp/pin-register.log
+        # Use ndsctl to authorize this client
+        ndsctl auth "$CLIENT_MAC" >> /tmp/pin-register.log 2>&1
+    else
+        echo "Could not determine client MAC address for IP: $CLIENT_IP" >> /tmp/pin-register.log
+    fi
+    
     # Success - show confirmation and redirect to splash page
     cat << EOF
 <!DOCTYPE html>
@@ -85,6 +98,7 @@ if [ $ACTIVATION_SUCCESS -eq 0 ]; then
     <h1 class="success">Device Activated Successfully!</h1>
     <p>Your device has been successfully registered with CaptiFi.</p>
     <p>You will be redirected to the guest WiFi page in 5 seconds...</p>
+    <p>Internet access has been enabled for your device.</p>
 </body>
 </html>
 EOF

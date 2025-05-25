@@ -48,17 +48,35 @@ fi
 # Get system uptime in seconds
 UPTIME=$(cat /proc/uptime | awk '{print $1}')
 
-# Send heartbeat
+# Send heartbeat with full debug output
 log "Sending heartbeat to CaptiFi (MAC: $MAC_ADDRESS, Uptime: $UPTIME)"
-RESPONSE=$(wget -q -O - --header="Content-Type: application/json" \
-    --post-data="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\"}" \
-    ${SERVER_URL}${API_ENDPOINT})
+log "API Endpoint: ${SERVER_URL}${API_ENDPOINT}"
+log "API Key: ${API_KEY:0:6}...${API_KEY: -6}"
+
+# Save request payload for debugging
+REQUEST_PAYLOAD="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\"}"
+log "Request payload: $REQUEST_PAYLOAD"
+
+# Create a temporary file for response
+RESP_FILE=$(mktemp)
+
+# Send request with detailed output
+wget -v -O "$RESP_FILE" --header="Content-Type: application/json" \
+    --post-data="$REQUEST_PAYLOAD" \
+    ${SERVER_URL}${API_ENDPOINT} 2>> "$LOG_FILE"
 
 # Check if wget command was successful
-if [ $? -ne 0 ]; then
-  log "Error: Failed to connect to CaptiFi server."
+WGET_STATUS=$?
+if [ $WGET_STATUS -ne 0 ]; then
+  log "Error: Failed to connect to CaptiFi server. wget exit code: $WGET_STATUS"
+  log "Command: wget --header=\"Content-Type: application/json\" --post-data=<payload> ${SERVER_URL}${API_ENDPOINT}"
   exit 1
 fi
+
+# Read response from temp file
+RESPONSE=$(cat "$RESP_FILE")
+log "Response received: $RESPONSE"
+rm -f "$RESP_FILE"
 
 # Update last heartbeat timestamp
 echo "$(date +%s)" > "$INSTALL_DIR/last_heartbeat"
