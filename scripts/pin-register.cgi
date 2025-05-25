@@ -47,7 +47,7 @@ if ! echo "$PIN" | grep -qE '^[0-9]{8}$'; then
 <html>
 <head>
     <title>Invalid PIN</title>
-    <meta http-equiv="refresh" content="5;url=/">
+    <meta http-equiv="refresh" content="5;url=/index.html">
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; text-align: center; }
         .error { color: red; }
@@ -57,6 +57,7 @@ if ! echo "$PIN" | grep -qE '^[0-9]{8}$'; then
     <h1 class="error">Invalid PIN Format</h1>
     <p>The PIN must be 8 digits. Please try again.</p>
     <p>You will be redirected back to the registration page in 5 seconds...</p>
+    <p><a href="/index.html">Click here if not redirected automatically</a></p>
 </body>
 </html>
 EOF
@@ -88,7 +89,7 @@ if [ $ACTIVATION_SUCCESS -eq 0 ]; then
 <html>
 <head>
     <title>Device Activated</title>
-    <meta http-equiv="refresh" content="5;url=/">
+    <meta http-equiv="refresh" content="5;url=/index.html">
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; text-align: center; }
         .success { color: green; }
@@ -121,7 +122,7 @@ else
 <html>
 <head>
     <title>Activation Failed</title>
-    <meta http-equiv="refresh" content="10;url=/">
+    <meta http-equiv="refresh" content="10;url=/index.html">
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; text-align: center; }
         .error { color: red; }
@@ -136,6 +137,7 @@ else
         <pre>${ACTIVATION_RESULT}</pre>
     </div>
     <p>You will be redirected back to the registration page in 10 seconds...</p>
+    <p><a href="/index.html">Click here if not redirected automatically</a></p>
 </body>
 </html>
 EOF

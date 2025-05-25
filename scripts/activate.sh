@@ -44,15 +44,46 @@ echo "Serial: $SERIAL"
 echo "PIN: ${PIN:0:4}****"
 echo ""
 
-# Call the activation API - using BusyBox compatible wget parameters
-RESPONSE=$(wget -q -O - --post-data="{\"pin\":\"${PIN}\",\"box_mac_address\":\"${MAC_ADDRESS}\",\"device_model\":\"${MODEL}\",\"serial\":\"${SERIAL}\"}" \
-    ${SERVER_URL}${API_ENDPOINT})
+# First, check if we can reach the server
+echo "Testing connection to CaptiFi server..."
+wget -q --spider ${SERVER_URL}
+if [ $? -ne 0 ]; then
+  echo "Error: Cannot reach CaptiFi server at ${SERVER_URL}. Testing internet connectivity..."
+  # Test general internet connectivity
+  wget -q --spider https://www.google.com
+  if [ $? -ne 0 ]; then
+    echo "Error: No internet connectivity. Please check your network settings."
+  else
+    echo "Internet is working, but cannot reach CaptiFi server specifically."
+    echo "Trying to add explicit DNS resolution..."
+    echo "157.230.53.133 app.captifi.io" >> /etc/hosts
+  fi
+  echo "Continuing anyway to show detailed error..."
+fi
+
+# Create a temporary file for the response
+RESP_FILE="/tmp/captifi_activation_response.txt"
+
+# Create payload file for better compatibility
+echo "{\"pin\":\"${PIN}\",\"box_mac_address\":\"${MAC_ADDRESS}\",\"device_model\":\"${MODEL}\",\"serial\":\"${SERIAL}\"}" > /tmp/captifi_payload.json
+
+# Call the activation API - using BusyBox compatible wget parameters with detailed output
+echo "Sending activation request to ${SERVER_URL}${API_ENDPOINT}..."
+wget -v -O "$RESP_FILE" --post-file=/tmp/captifi_payload.json ${SERVER_URL}${API_ENDPOINT} 2>&1
+WGET_STATUS=$?
 
 # Check if wget command was successful
-if [ $? -ne 0 ]; then
-  echo "Error: Failed to connect to CaptiFi server. Please check your internet connection and try again."
+if [ $WGET_STATUS -ne 0 ]; then
+  echo "Error: Failed to connect to CaptiFi server (wget status: $WGET_STATUS)."
+  # Display detailed error information
+  echo "Command used: wget -O $RESP_FILE --post-file=/tmp/captifi_payload.json ${SERVER_URL}${API_ENDPOINT}"
+  echo "Please check your internet connection and try again."
   exit 1
 fi
+
+# Read response
+RESPONSE=$(cat "$RESP_FILE" 2>/dev/null)
+rm -f "$RESP_FILE" /tmp/captifi_payload.json
 
 # Extract API key and other information from response
 API_KEY=$(echo "$RESPONSE" | grep -o '"api_key":"[^"]*"' | cut -d'"' -f4)

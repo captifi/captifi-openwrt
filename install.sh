@@ -51,22 +51,22 @@ download_file "config/nodogsplash.config" "$CONFIG_DIR/nodogsplash.config"
 
 # Configure firewall for CaptiFi API access
 echo "Configuring firewall..."
-cat << 'EOF' > /tmp/captifi_firewall.rule
-config rule
-        option name 'Allow-Captifi-API'
-        option src 'lan'
-        option dest 'wan'
-        option dest_ip '157.230.53.133'
-        option proto 'tcp'
-        option dest_port '443'
-        option src_ip '157.230.53.133'
-        option src_port '443'
-        option target 'ACCEPT'
-EOF
 
-# Add the rule to the firewall config
-cat /tmp/captifi_firewall.rule >> /etc/config/firewall
-rm /tmp/captifi_firewall.rule
+# Check if firewall rules already exist
+if ! grep -q "Allow-Captifi-API" /etc/config/firewall; then
+  # Add rule directly with uci
+  uci add firewall rule
+  uci set firewall.@rule[-1].name='Allow-Captifi-API'
+  uci set firewall.@rule[-1].src='lan'
+  uci set firewall.@rule[-1].dest='wan'
+  uci set firewall.@rule[-1].dest_ip='157.230.53.133'
+  uci set firewall.@rule[-1].proto='tcp'
+  uci set firewall.@rule[-1].dest_port='443'
+  uci set firewall.@rule[-1].target='ACCEPT'
+  echo "Added firewall rule for CaptiFi API access"
+else
+  echo "CaptiFi API firewall rule already exists"
+fi
 
 # Restart firewall
 /etc/init.d/firewall restart
@@ -125,18 +125,20 @@ EOF
 
 # Create a default rule to block internet access for unauthenticated users
 echo "Setting up firewall to block internet access until authenticated..."
-cat << 'EOF' > /tmp/captifi_internet_block.rule
-config rule
-        option name 'CaptiFi-Block-Internet'
-        option src 'lan'
-        option dest 'wan'
-        option proto 'all'
-        option target 'REJECT'
-EOF
 
-# Add the internet blocking rule to the firewall config
-cat /tmp/captifi_internet_block.rule >> /etc/config/firewall
-rm /tmp/captifi_internet_block.rule
+# Check if block rule already exists
+if ! grep -q "CaptiFi-Block-Internet" /etc/config/firewall; then
+  # Add rule directly with uci
+  uci add firewall rule
+  uci set firewall.@rule[-1].name='CaptiFi-Block-Internet'
+  uci set firewall.@rule[-1].src='lan'
+  uci set firewall.@rule[-1].dest='wan'
+  uci set firewall.@rule[-1].proto='all'
+  uci set firewall.@rule[-1].target='REJECT'
+  echo "Added firewall rule to block internet access"
+else
+  echo "Internet blocking rule already exists"
+fi
 
 # Configure the web server 
 echo "Configuring web server for CGI scripts..."
