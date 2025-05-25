@@ -22,11 +22,33 @@ API_KEY=$(cat "$INSTALL_DIR/api_key")
 
 echo "Fetching splash page from CaptiFi..."
 
+# Temporarily disable internet blocking for API access
+echo "Temporarily allowing internet access for splash page download..."
+CAPTIFI_RULE=$(uci show firewall | grep -o "@rule.*CaptiFi-Block-Internet.*" | cut -d'.' -f1 | head -n 1)
+if [ -n "$CAPTIFI_RULE" ]; then
+  # Temporarily disable the rule by setting enabled to 0
+  uci set firewall.${CAPTIFI_RULE}.enabled='0'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  echo "Internet access temporarily enabled"
+else
+  echo "No internet blocking rule found to disable"
+fi
+
 # Fetch the splash page - BusyBox compatible wget
 # Note: Without header support, we need to ensure the API accepts the key in the URL
 # Create URL with API key as query parameter
 FETCH_URL="${SERVER_URL}${API_ENDPOINT}?api_key=${API_KEY}"
 wget -q -O ${OUTPUT_FILE} "${FETCH_URL}"
+WGET_STATUS=$?
+
+# Re-enable the firewall rule
+if [ -n "$CAPTIFI_RULE" ]; then
+  uci set firewall.${CAPTIFI_RULE}.enabled='1'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  echo "Internet blocking re-enabled"
+fi
 
 # Check if wget command was successful
 if [ $? -ne 0 ]; then

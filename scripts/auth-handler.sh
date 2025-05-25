@@ -83,12 +83,35 @@ log "Guest details - Name: $GUEST_NAME, Email: $GUEST_EMAIL, Phone: $GUEST_PHONE
 # Prepare JSON payload
 JSON_PAYLOAD="{\"api_key\":\"${API_KEY}\",\"mac_address\":\"${MAC_ADDRESS}\",\"guest_data\":{\"name\":\"${GUEST_NAME}\",\"email\":\"${GUEST_EMAIL}\",\"phone\":\"${GUEST_PHONE}\",\"marketing_opt_in\":${GUEST_OPT_IN}}}"
 
+# Temporarily disable internet blocking for API access
+log "Temporarily allowing internet access for API communication..."
+CAPTIFI_RULE=$(uci show firewall | grep -o "@rule.*CaptiFi-Block-Internet.*" | cut -d'.' -f1 | head -n 1)
+if [ -n "$CAPTIFI_RULE" ]; then
+  # Temporarily disable the rule by setting enabled to 0
+  uci set firewall.${CAPTIFI_RULE}.enabled='0'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  log "Internet access temporarily enabled"
+else
+  log "No internet blocking rule found to disable"
+fi
+
 # Send data to CaptiFi API
 log "Sending guest data to CaptiFi API"
 # Create temporary file for response
 RESP_FILE="/tmp/captifi_auth_response.txt"
 wget -q -O "$RESP_FILE" --post-data="$JSON_PAYLOAD" \
   ${SERVER_URL}${API_ENDPOINT}
+WGET_STATUS=$?
+
+# Re-enable the firewall rule
+if [ -n "$CAPTIFI_RULE" ]; then
+  uci set firewall.${CAPTIFI_RULE}.enabled='1'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  log "Internet blocking re-enabled"
+fi
+
 RESPONSE=$(cat "$RESP_FILE" 2>/dev/null)
 rm -f "$RESP_FILE"
 

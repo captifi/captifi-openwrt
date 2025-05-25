@@ -44,21 +44,17 @@ echo "Serial: $SERIAL"
 echo "PIN: ${PIN:0:4}****"
 echo ""
 
-# First, check if we can reach the server
-echo "Testing connection to CaptiFi server..."
-wget -q --spider ${SERVER_URL}
-if [ $? -ne 0 ]; then
-  echo "Error: Cannot reach CaptiFi server at ${SERVER_URL}. Testing internet connectivity..."
-  # Test general internet connectivity
-  wget -q --spider https://www.google.com
-  if [ $? -ne 0 ]; then
-    echo "Error: No internet connectivity. Please check your network settings."
-  else
-    echo "Internet is working, but cannot reach CaptiFi server specifically."
-    echo "Trying to add explicit DNS resolution..."
-    echo "157.230.53.133 app.captifi.io" >> /etc/hosts
-  fi
-  echo "Continuing anyway to show detailed error..."
+# First, allow all outbound traffic for the activation
+echo "Temporarily allowing internet access for activation..."
+CAPTIFI_RULE=$(uci show firewall | grep -o "@rule.*CaptiFi-Block-Internet.*" | cut -d'.' -f1 | head -n 1)
+if [ -n "$CAPTIFI_RULE" ]; then
+  # Temporarily disable the rule by setting enabled to 0
+  uci set firewall.${CAPTIFI_RULE}.enabled='0'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  echo "Internet access temporarily enabled for activation"
+else
+  echo "No internet blocking rule found to disable"
 fi
 
 # Create a temporary file for the response
@@ -67,23 +63,70 @@ RESP_FILE="/tmp/captifi_activation_response.txt"
 # Create payload file for better compatibility
 echo "{\"pin\":\"${PIN}\",\"box_mac_address\":\"${MAC_ADDRESS}\",\"device_model\":\"${MODEL}\",\"serial\":\"${SERIAL}\"}" > /tmp/captifi_payload.json
 
-# Call the activation API - using BusyBox compatible wget parameters with detailed output
+# Call the activation API - using BusyBox compatible wget parameters
 echo "Sending activation request to ${SERVER_URL}${API_ENDPOINT}..."
-wget -v -O "$RESP_FILE" --post-file=/tmp/captifi_payload.json ${SERVER_URL}${API_ENDPOINT} 2>&1
+wget -q -O "$RESP_FILE" --post-file=/tmp/captifi_payload.json ${SERVER_URL}${API_ENDPOINT}
 WGET_STATUS=$?
 
 # Check if wget command was successful
 if [ $WGET_STATUS -ne 0 ]; then
   echo "Error: Failed to connect to CaptiFi server (wget status: $WGET_STATUS)."
-  # Display detailed error information
-  echo "Command used: wget -O $RESP_FILE --post-file=/tmp/captifi_payload.json ${SERVER_URL}${API_ENDPOINT}"
-  echo "Please check your internet connection and try again."
-  exit 1
+  # Display error information
+  echo "Command used: wget -q -O $RESP_FILE --post-file=/tmp/captifi_payload.json ${SERVER_URL}${API_ENDPOINT}"
+  echo "Testing basic connectivity..."
+  
+  # Test if we can reach google.com
+  wget -q --spider https://www.google.com
+  if [ $? -eq 0 ]; then
+    echo "Internet connection is working (can reach google.com)"
+    # Add DNS entry for CaptiFi
+    echo "157.230.53.133 app.captifi.io" >> /etc/hosts
+    echo "Added DNS entry for app.captifi.io"
+    # Try again with the DNS entry
+    wget -q -O "$RESP_FILE" --post-file=/tmp/captifi_payload.json ${SERVER_URL}${API_ENDPOINT}
+    WGET_STATUS=$?
+    if [ $WGET_STATUS -eq 0 ]; then
+      echo "Connection successful after adding DNS entry!"
+    else
+      echo "Still cannot connect to CaptiFi server."
+      echo "Please check your internet connection and try again."
+      
+      # Re-enable the firewall rule before exiting
+      if [ -n "$CAPTIFI_RULE" ]; then
+        uci set firewall.${CAPTIFI_RULE}.enabled='1'
+        uci commit firewall
+        /etc/init.d/firewall restart
+        echo "Internet blocking re-enabled"
+      fi
+      
+      exit 1
+    fi
+  else
+    echo "No internet connectivity at all. Please check your network settings."
+    
+    # Re-enable the firewall rule before exiting
+    if [ -n "$CAPTIFI_RULE" ]; then
+      uci set firewall.${CAPTIFI_RULE}.enabled='1'
+      uci commit firewall
+      /etc/init.d/firewall restart
+      echo "Internet blocking re-enabled"
+    fi
+    
+    exit 1
+  fi
 fi
 
 # Read response
 RESPONSE=$(cat "$RESP_FILE" 2>/dev/null)
 rm -f "$RESP_FILE" /tmp/captifi_payload.json
+
+# Re-enable the firewall rule after activation
+if [ -n "$CAPTIFI_RULE" ]; then
+  uci set firewall.${CAPTIFI_RULE}.enabled='1'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  echo "Internet blocking re-enabled after activation"
+fi
 
 # Extract API key and other information from response
 API_KEY=$(echo "$RESPONSE" | grep -o '"api_key":"[^"]*"' | cut -d'"' -f4)

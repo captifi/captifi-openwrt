@@ -48,6 +48,19 @@ fi
 # Get system uptime in seconds
 UPTIME=$(cat /proc/uptime | awk '{print $1}')
 
+# Temporarily disable internet blocking for API access
+log "Temporarily allowing internet access for heartbeat..."
+CAPTIFI_RULE=$(uci show firewall | grep -o "@rule.*CaptiFi-Block-Internet.*" | cut -d'.' -f1 | head -n 1)
+if [ -n "$CAPTIFI_RULE" ]; then
+  # Temporarily disable the rule by setting enabled to 0
+  uci set firewall.${CAPTIFI_RULE}.enabled='0'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  log "Internet access temporarily enabled"
+else
+  log "No internet blocking rule found to disable"
+fi
+
 # Send heartbeat with full debug output
 log "Sending heartbeat to CaptiFi (MAC: $MAC_ADDRESS, Uptime: $UPTIME)"
 log "API Endpoint: ${SERVER_URL}${API_ENDPOINT}"
@@ -67,6 +80,15 @@ wget -q -O "$RESP_FILE" --post-data="$REQUEST_PAYLOAD" \
 
 # Check if wget command was successful
 WGET_STATUS=$?
+
+# Re-enable the firewall rule
+if [ -n "$CAPTIFI_RULE" ]; then
+  uci set firewall.${CAPTIFI_RULE}.enabled='1'
+  uci commit firewall
+  /etc/init.d/firewall restart
+  log "Internet blocking re-enabled"
+fi
+
 if [ $WGET_STATUS -ne 0 ]; then
   log "Error: Failed to connect to CaptiFi server. wget exit code: $WGET_STATUS"
   log "Command: wget -q -O $RESP_FILE --post-data=[payload] ${SERVER_URL}${API_ENDPOINT}"
