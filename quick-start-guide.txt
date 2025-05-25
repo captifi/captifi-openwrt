@@ -1,0 +1,63 @@
+======================================================
+  CaptiFi OpenWRT Integration - Quick Start Guide
+======================================================
+
+This guide provides a quick overview of installing and using the CaptiFi integration
+for OpenWRT devices.
+
+INSTALLATION
+-----------
+1. SSH into your OpenWRT device
+2. Download the installation script:
+   wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/no-nodogsplash-install.sh
+3. Make it executable:
+   chmod +x no-nodogsplash-install.sh
+4. Run the script:
+   ./no-nodogsplash-install.sh
+5. Follow the prompts to configure WiFi settings and IP address
+
+ACTIVATION
+----------
+1. Connect to the WiFi network of your OpenWRT device
+2. Open a web browser and navigate to http://192.168.1.1 (or your router's IP)
+3. You'll see the CaptiFi PIN registration page
+4. Enter your 8-digit PIN provided by CaptiFi
+5. After successful activation, you'll see the guest splash page
+
+TESTING
+-------
+To verify all components are working correctly:
+1. SSH into your OpenWRT device
+2. Run the testing script:
+   ./test-integration.sh
+3. Review the results and fix any issues
+
+RESET TO PIN MODE
+----------------
+If you need to reassign the device to a different CaptiFi account:
+1. SSH into your OpenWRT device
+2. Run the reset script:
+   ./reset-to-pin-mode.sh
+3. The device will return to PIN registration mode
+
+UNINSTALLATION
+-------------
+To completely remove the CaptiFi integration:
+1. SSH into your OpenWRT device
+2. Run the uninstall script:
+   ./uninstall.sh
+3. Follow the prompts to remove all components
+
+TROUBLESHOOTING
+--------------
+- If PIN registration fails, check internet connectivity
+- If the captive portal isn't redirecting, try:
+  /etc/captifi/scripts/captive-redirect.sh enable
+- If guests can't connect, check the API key status:
+  cat /etc/captifi/api_key
+- For detailed diagnostics:
+  ./test-integration.sh
+
+For more information, please see the full README.md file.
+
+For support, contact support@captifi.io

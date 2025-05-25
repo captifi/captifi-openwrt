@@ -1,15 +1,33 @@
-# macOS system files
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
+# CaptiFi OpenWRT Integration .gitignore
 
-# Logs and temporary files
-*.log
+# Temporary files
 *.tmp
+*.temp
+*.bak
+*~
+
+# Log files
+*.log
 
 # Editor files
 .vscode/
 .idea/
 *.swp
-*~
+*.swo
+
+# Compiled Python files
+*.pyc
+__pycache__/
+
+# Packages
+*.tar.gz
+*.zip
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Sensitive information
+secrets.txt
+*_key
+api_key

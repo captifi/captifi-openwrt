@@ -1,218 +1,195 @@
-# CaptiFi OpenWRT Integration - PIN Registration System
+# CaptiFi OpenWRT Integration
 
-This repository contains scripts to integrate OpenWRT devices with CaptiFi's captive portal system using Nodogsplash, featuring a self-service PIN registration workflow for customer deployments.
+This project provides a streamlined integration between OpenWRT devices and the CaptiFi captive portal system. It enables OpenWRT-based routers to offer guest WiFi with captive portal functionality, allowing guests to register with a PIN provided by CaptiFi.
 
-## Overview
+## Features
 
-This integration creates a customer-friendly deployment system where:
+- PIN-based device activation
+- Direct API communication with CaptiFi servers
+- Guest WiFi splash page with Terms of Service acceptance
+- Automated heartbeat reporting to CaptiFi
+- SSH-safe implementation (no SSH lockout issues)
+- No dependency on nodogsplash or other captive portal packages
 
-1. The WiFi network name is set to "CaptiFi Setup" during installation
-2. The LAN IP address is changed to 192.168.2.1
-3. Internet access is blocked for all clients until authenticated
-4. Customers connect to the WiFi and automatically see a captive portal PIN page
-5. They enter their CaptiFi PIN to activate the device
-6. Upon successful activation, the customer's device gets internet access
-7. The system fetches and displays their custom splash page to future guests
-8. The activated device maintains communication with CaptiFi via heartbeats
-9. Guest data is collected and sent to CaptiFi
-10. The device receives and processes commands from CaptiFi
+## Prerequisites
 
-## Quick Installation
+- OpenWRT device (v21.02 or newer recommended)
+- Internet connection
+- SSH access to the OpenWRT device
+- CaptiFi account with a valid PIN
 
-To install the CaptiFi integration with PIN registration on your OpenWRT device, run the following command:
+## Installation
 
+### Option 1: Automated Installation
+
+1. SSH into your OpenWRT device
+2. Download the installation script:
 ```bash
-wget -O - https://raw.githubusercontent.com/captifi/captifi-openwrt/main/install.sh | sh
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/no-nodogsplash-install.sh
+```
+3. Make it executable:
+```bash
+chmod +x no-nodogsplash-install.sh
+```
+4. Run the script:
+```bash
+./no-nodogsplash-install.sh
+```
+5. Follow the prompts to configure WiFi settings and IP address
+
+### Option 2: Manual Installation
+
+If you prefer to install the components manually, follow these steps:
+
+1. Install required packages:
+```bash
+opkg update
+opkg install curl uhttpd
 ```
 
-Unlike the standard version, this script does NOT prompt for a PIN during installation. Instead, it sets up a self-service activation system where customers will enter their PIN through the captive portal.
+2. Create required directories:
+```bash
+mkdir -p /etc/captifi/scripts /www/cgi-bin
+```
 
-Note: The installation script uses `wget` which is commonly available on OpenWRT devices.
+3. Download scripts from this repository:
+```bash
+cd /etc/captifi/scripts
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/scripts/activate.sh
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/scripts/fetch-splash.sh
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/scripts/heartbeat.sh
+chmod +x *.sh
+```
 
-## Requirements
+4. Download CGI scripts and web files:
+```bash
+cd /www/cgi-bin
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/cgi-bin/pin-register
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/cgi-bin/auth
+chmod +x *
 
-- OpenWRT device with internet access
-- CaptiFi account that can generate customer PINs
-- Sufficient storage space (approximately 2MB)
-- uhttpd with CGI support (installed automatically)
+cd /www
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/index.html
+wget https://raw.githubusercontent.com/captifi/captifi-openwrt/main/splash.html
+```
 
-## Components
+5. Configure web server:
+```bash
+uci set uhttpd.main.interpreter='.cgi=/bin/sh'
+uci set uhttpd.main.cgi_prefix='/cgi-bin'
+uci commit uhttpd
+/etc/init.d/uhttpd restart
+```
 
-The integration consists of the following components:
+6. Set up heartbeat service:
+```bash
+echo "*/5 * * * * /etc/captifi/scripts/heartbeat.sh" > /etc/crontabs/root
+/etc/init.d/cron enable
+/etc/init.d/cron restart
+```
 
-- **install.sh** - Main installation script
-- **pin-registry.html** - PIN entry splash page for device activation
-- **scripts/activate.sh** - Device activation with PIN
-- **scripts/pin-register.cgi** - CGI handler for processing PIN submissions
-- **scripts/fetch-splash.sh** - Fetch splash page from CaptiFi
-- **scripts/heartbeat.sh** - Send periodic heartbeats and process commands
-- **scripts/auth-handler.sh** - Handle guest authentication
-- **config/nodogsplash.config** - Nodogsplash configuration
+## Usage
 
-## Key Features
+### First-time Setup
 
-- **Automatic Captive Portal Detection**: Compatible with Apple, Android, and Windows devices
-- **Internet Blocking**: Prevents internet access until device is properly authenticated
-- **Customer Self-Registration**: Simple PIN entry workflow with immediate internet access
-- **Reliable Heartbeat System**: Enhanced logging and error recovery
-- **Custom Branded Splash**: After activation, guests see your custom splash page
+1. After installation, connect to your OpenWRT device's WiFi network (default SSID: "OpenWRT")
+2. Open a browser and navigate to your router's IP address (default: 192.168.1.1)
+3. You should see the CaptiFi PIN registration page
+4. Enter your 8-digit PIN provided by CaptiFi
+5. Upon successful activation, you'll be redirected to the splash page
 
-## How PIN Registration Works
+### Guest WiFi Usage
 
-1. **Initial Setup**:
-   - When the device is first installed, it's configured with a generic PIN registration splash page
-   - Both WiFi networks (2.4GHz and 5GHz) are renamed to "CaptiFi Setup"
-   - LAN IP address is set to 192.168.2.1
-   - All internet access is blocked by default
-   - No activation PIN is required during installation
+Once the device is activated:
 
-2. **Customer First Connection**:
-   - When a customer connects to the "CaptiFi Setup" WiFi, a captive portal automatically appears
-   - They see the PIN registration page without having to manually browse to any URL
-   - They enter their CaptiFi PIN to activate the device
-   - The PIN is submitted to a CGI script that processes the activation
+1. Guests connect to your WiFi network
+2. They are presented with the CaptiFi splash page
+3. They click "Connect to Internet" to gain access
+4. The system records the connection in the CaptiFi dashboard
 
-3. **Activation Process**:
-   - The PIN is validated and sent to the CaptiFi API along with device information
-   - Upon successful activation, an API key is obtained
-   - The customer's device is automatically authorized for internet access
-   - The system fetches the customer's personalized splash page
-   - The PIN registration page is replaced with the customer's splash page
+### Admin Access
 
-4. **Subsequent Guest Connections**:
-   - After activation, all guests connecting to the WiFi see the customer's splash page
-   - Internet access is blocked until they authenticate via the splash page
-   - Guest information is collected and sent to CaptiFi
-
-## Manual Installation
-
-If you prefer to install the components manually:
-
-1. Create the necessary directories:
-   ```bash
-   mkdir -p /etc/captifi/scripts /etc/captifi/config /www /www/cgi-bin
-   ```
-
-2. Copy the scripts to the appropriate directories:
-   ```bash
-   cp scripts/*.sh /etc/captifi/scripts/
-   cp scripts/pin-register.cgi /www/cgi-bin/pin-register
-   cp config/* /etc/captifi/config/
-   cp pin-registry.html /www/index.html
-   ```
-
-3. Make the scripts executable:
-   ```bash
-   chmod +x /etc/captifi/scripts/*.sh
-   chmod +x /www/cgi-bin/pin-register
-   ```
-
-4. Configure uhttpd for CGI:
-   ```bash
-   uci set uhttpd.main.interpreter='.cgi=/bin/sh'
-   uci set uhttpd.main.cgi_prefix='/cgi-bin'
-   uci commit uhttpd
-   /etc/init.d/uhttpd restart
-   ```
-
-5. Configure Nodogsplash:
-   ```bash
-   cp /etc/captifi/config/nodogsplash.config /etc/config/nodogsplash
-   ```
-
-6. Configure the firewall:
-   ```bash
-   # Add CaptiFi API access to firewall
-   uci add firewall rule
-   uci set firewall.@rule[-1].name='Allow-Captifi-API'
-   uci set firewall.@rule[-1].src='lan'
-   uci set firewall.@rule[-1].dest='wan'
-   uci set firewall.@rule[-1].dest_ip='157.230.53.133'
-   uci set firewall.@rule[-1].proto='tcp'
-   uci set firewall.@rule[-1].dest_port='443'
-   uci set firewall.@rule[-1].target='ACCEPT'
-   uci commit firewall
-   /etc/init.d/firewall restart
-   ```
-
-7. Set up the heartbeat cron job:
-   ```bash
-   echo "*/5 * * * * /etc/captifi/scripts/heartbeat.sh" >> /etc/crontabs/root
-   /etc/init.d/cron restart
-   ```
-
-8. Enable self-activation mode:
-   ```bash
-   touch /etc/captifi/self_activate_mode
-   ```
-
-## Customization
-
-You can customize the following aspects of the integration:
-
-- **PIN registration page**: Edit `/www/pin-registration.html` to change the appearance of the PIN entry page
-- **Splash page timeout**: Edit `/etc/config/nodogsplash` and change the `authidletimeout` value
-- **Heartbeat frequency**: Modify the cron job timing in `/etc/crontabs/root`
-- **Walled garden**: Add domains to the `walledgarden_fqdn_list` in `/etc/config/nodogsplash`
+The router's admin interface remains accessible at:
+```
+http://<router-ip>/cgi-bin/luci/
+```
 
 ## Troubleshooting
 
-Check the following log files for debugging information:
+### API Connection Issues
 
-- **Activation log**: Use `cat /etc/captifi/api_key` to verify the device is activated
-- **Heartbeat log**: Check `/etc/captifi/heartbeat.log` for communication issues
-- **Auth log**: Check `/etc/captifi/auth.log` for guest authentication issues
-- **Nodogsplash log**: Run `logread | grep nodogsplash` to see Nodogsplash-related messages
-- **uhttpd log**: Run `logread | grep uhttpd` for CGI script errors
+If you see "Failed to connect to CaptiFi server" errors:
 
-Common issues and solutions:
+1. Verify internet connectivity:
+```bash
+ping google.com
+```
 
-1. **PIN registration page not appearing**: 
-   - Check if `/www/index.html` exists
-   - Restart uhttpd (`/etc/init.d/uhttpd restart`)
-   - Restart Nodogsplash (`/etc/init.d/nodogsplash restart`)
+2. Check DNS resolution:
+```bash
+nslookup app.captifi.io
+```
 
-2. **PIN submission not working**:
-   - Check if the CGI script is executable (`chmod +x /www/cgi-bin/pin-register`)
-   - Verify uhttpd CGI configuration (`uci show uhttpd.main.interpreter`)
-   - Check uhttpd logs for CGI errors
+3. Add a direct DNS entry:
+```bash
+echo "157.230.53.133 app.captifi.io" >> /etc/hosts
+```
 
-3. **Device not activating with PIN**:
-   - Verify internet connectivity
-   - Ensure the PIN is valid and not expired
-   - Check the activation script for errors (`/etc/captifi/scripts/activate.sh`)
+4. Check heartbeat logs:
+```bash
+cat /tmp/captifi_heartbeat.log
+```
 
-4. **Splash page not appearing after activation**:
-   - Check if the device has been activated (`cat /etc/captifi/api_key`)
-   - Verify the splash page was downloaded (`ls -la /www/splash.html`)
-   - Restart Nodogsplash (`/etc/init.d/nodogsplash restart`)
+### Web Server Issues
 
-5. **API connection issues**: 
-   - Verify the firewall rule is correctly configured
-   - Test connectivity to the CaptiFi API server
+If the web pages don't display correctly:
 
-## Reset to PIN Registration Mode
+1. Restart the web server:
+```bash
+/etc/init.d/uhttpd restart
+```
 
-If you need to reset a device to PIN registration mode (e.g., for redeployment to a new customer):
+2. Check web server status:
+```bash
+ps | grep uhttpd
+```
+
+3. Verify file permissions:
+```bash
+chmod -R 644 /www/*.html
+chmod -R 755 /www/cgi-bin
+```
+
+### Activation Issues
+
+If PIN activation fails:
+
+1. Test activation manually:
+```bash
+/etc/captifi/scripts/activate.sh YOUR_PIN_HERE
+```
+
+2. Check for API connectivity using curl:
+```bash
+curl -v -k https://app.captifi.io/
+```
+
+3. Verify the PIN is valid in your CaptiFi dashboard
+
+## Uninstallation
+
+To remove the CaptiFi integration:
 
 ```bash
-# Remove the API key
-rm -f /etc/captifi/api_key
-
-# Enable self-activation mode
-touch /etc/captifi/self_activate_mode
-
-# Restore the PIN registration page
-cp /www/pin-registration.html /www/index.html
-
-# Restart services
-/etc/init.d/nodogsplash restart
+rm -rf /etc/captifi
+rm -f /www/cgi-bin/pin-register /www/cgi-bin/auth
+sed -i '/captifi/d' /etc/crontabs/root
+/etc/init.d/cron restart
+/etc/init.d/uhttpd restart
 ```
 
 ## Support
 
-For support, contact CaptiFi support at support@captifi.io.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+For support, please contact:
+- CaptiFi Support: support@captifi.io
+- GitHub Issues: [Create a new issue](https://github.com/captifi/captifi-openwrt/issues)
