@@ -109,6 +109,18 @@ while [ $RETRY -lt $MAX_RETRIES ] && [ "$SUCCESS" != "true" ]; do
             log "Executing command: reboot"
             reboot
             ;;
+          "reset")
+            log "Executing command: reset device to PIN mode"
+            if [ -f "$INSTALL_DIR/scripts/reset-to-pin-mode.sh" ]; then
+              $INSTALL_DIR/scripts/reset-to-pin-mode.sh --auto
+            else
+              log "Error: Reset script not found"
+              # Fall back to manual reset if script not found
+              rm -f "$INSTALL_DIR/api_key" "$INSTALL_DIR/config.json"
+              touch "$INSTALL_DIR/self_activate_mode"
+              log "Removed API key and reset to self-activation mode"
+            fi
+            ;;
           *)
             log "Unknown command: $COMMAND"
             ;;

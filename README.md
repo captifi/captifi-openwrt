@@ -124,6 +124,7 @@ http://<router-ip>/cgi-bin/luci/
 - No dependency on nodogsplash or other captive portal packages
 - Robust error handling and fallback mechanisms
 - Automatic backup and recovery for splash pages
+- Remote device management via API commands
 
 ## Troubleshooting
 
@@ -151,6 +152,28 @@ opkg install iptables iptables-mod-nat-extra
 ```bash
 /etc/captifi/scripts/captive-redirect.sh status
 ```
+
+### API Commands
+
+The heartbeat system supports receiving commands from the CaptiFi server:
+
+1. **fetch_splash**: Instructs the device to download a new splash page
+2. **reboot**: Tells the device to reboot itself
+3. **reset**: Resets the device to PIN registration mode (useful when deregistering)
+
+To send a reset command from your CaptiFi server, respond to a heartbeat with:
+
+```json
+{
+  "success": true,
+  "command": "reset"
+}
+```
+
+This will cause the device to:
+1. Remove its API key and configuration
+2. Reset to the PIN registration web page
+3. Prepare for activation with a new PIN
 
 ### API Connection Issues
 

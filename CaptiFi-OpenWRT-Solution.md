@@ -11,6 +11,7 @@ We've developed a streamlined integration between OpenWRT devices and the CaptiF
 - **SSH-Safe Implementation**: No risk of administrative lockout
 - **Lightweight Captive Portal**: Simple redirection without complex dependencies
 - **Real-time Monitoring**: Automated heartbeat reporting to CaptiFi
+- **Remote Management**: API command support including remote reset capability
 - **Easy Reset and Recovery**: Tools to reset or remove the integration
 
 ## Technical Architecture

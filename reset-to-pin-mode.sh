@@ -7,14 +7,24 @@ echo "========================================================"
 echo "  CaptiFi OpenWRT Integration - Reset to PIN Mode"
 echo "========================================================"
 echo ""
-echo "This script will reset this device to PIN registration mode."
-echo "All current CaptiFi activation data will be removed."
-echo "Would you like to proceed? (y/n)"
-read CONFIRM
+# Check for auto mode
+AUTO_MODE=0
+if [ "$1" = "--auto" ]; then
+    AUTO_MODE=1
+fi
 
-if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
-    echo "Reset cancelled."
-    exit 0
+if [ $AUTO_MODE -eq 0 ]; then
+    echo "This script will reset this device to PIN registration mode."
+    echo "All current CaptiFi activation data will be removed."
+    echo "Would you like to proceed? (y/n)"
+    read CONFIRM
+
+    if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
+        echo "Reset cancelled."
+        exit 0
+    fi
+else
+    echo "Automated reset mode: resetting device to PIN registration mode..."
 fi
 
 # Base variables
