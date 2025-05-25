@@ -70,6 +70,19 @@ rm /tmp/captifi_firewall.rule
 # Restart firewall
 /etc/init.d/firewall restart
 
+# Configure LAN IP address
+echo "Setting LAN IP address to 192.168.2.1..."
+if [ -f /etc/config/network ]; then
+  # Set LAN IP address
+  uci set network.lan.ipaddr='192.168.2.1'
+  # Commit changes and restart network
+  uci commit network
+  /etc/init.d/network restart
+  echo "LAN IP address updated to 192.168.2.1"
+else
+  echo "Warning: Network configuration not found."
+fi
+
 # Configure wireless networks
 echo "Configuring wireless networks to 'CaptiFi Setup'..."
 # Try to set both radio0 and radio1 if they exist

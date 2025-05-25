@@ -28,6 +28,9 @@ echo "WARNING: This will reset the device to PIN registration mode."
 echo "Any existing activation will be removed, and customers will"
 echo "need to enter a PIN again to activate this device."
 echo ""
+echo "NOTE: This script will NOT change the IP address (192.168.2.1)"
+echo "or WiFi names. Only the activation state will be reset."
+echo ""
 echo "Press ENTER to continue or CTRL+C to cancel..."
 read CONFIRM
 

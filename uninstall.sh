@@ -36,6 +36,28 @@ else
   echo "Firewall rule not found."
 fi
 
+# Restore original network configuration
+echo "Restoring network configuration..."
+if [ -f /etc/config/network ]; then
+  # Ask if the user wants to reset the IP address
+  echo ""
+  echo "Do you want to reset the LAN IP address from 192.168.2.1 back to 192.168.1.1?"
+  echo "Enter 'y' to reset or any other key to leave as is:"
+  read RESET_IP
+  
+  if [ "$RESET_IP" = "y" ] || [ "$RESET_IP" = "Y" ]; then
+    echo "Resetting LAN IP address to 192.168.1.1..."
+    uci set network.lan.ipaddr='192.168.1.1'
+    uci commit network
+    echo "LAN IP address reset to 192.168.1.1"
+    echo "NOTE: Network will be restarted at the end of uninstallation."
+  else
+    echo "LAN IP address left unchanged."
+  fi
+else
+  echo "Network configuration not found."
+fi
+
 # Restore original wireless configuration
 echo "Restoring wireless configuration..."
 if [ -f /etc/config/wireless ]; then
@@ -87,6 +109,12 @@ uci delete uhttpd.main.interpreter
 uci delete uhttpd.main.cgi_prefix
 uci commit uhttpd
 /etc/init.d/uhttpd restart
+
+# Restart network if IP was reset
+if [ "$RESET_IP" = "y" ] || [ "$RESET_IP" = "Y" ]; then
+  echo "Restarting network with new IP address..."
+  /etc/init.d/network restart
+fi
 
 echo ""
 echo "========================================================"
