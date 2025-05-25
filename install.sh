@@ -30,7 +30,8 @@ mkdir -p $INSTALL_DIR $CONFIG_DIR $SCRIPTS_DIR $WWW_DIR $CGI_DIR
 # Install required packages
 echo "Installing required packages..."
 opkg update
-opkg install wget nodogsplash bash uhttpd uhttpd-mod-cgi
+opkg install wget nodogsplash bash uhttpd
+# Note: uhttpd in OpenWrt 23.05+ already includes CGI support without a separate package
 
 # Download scripts from GitHub
 echo "Downloading scripts..."
@@ -131,37 +132,22 @@ config rule
         option dest 'wan'
         option proto 'all'
         option target 'REJECT'
-        option extra '--reject-with icmp-port-unreachable'
 EOF
 
 # Add the internet blocking rule to the firewall config
 cat /tmp/captifi_internet_block.rule >> /etc/config/firewall
 rm /tmp/captifi_internet_block.rule
-/etc/init.d/firewall restart
 
-# Enable and start services
-echo "Starting services..."
-/etc/init.d/nodogsplash enable
-/etc/init.d/nodogsplash start
-/etc/init.d/cron enable
-/etc/init.d/cron start
-
-echo "Setting up captive portal detection..."
-# Force captive portal detection by routing to CaptiFi site
-route add -host captive.apple.com gw 192.168.2.1
-route add -host connectivitycheck.gstatic.com gw 192.168.2.1
+# Configure the web server 
+echo "Configuring web server for CGI scripts..."
+uci set uhttpd.main.interpreter='.cgi=/bin/sh'
+uci set uhttpd.main.cgi_prefix='/cgi-bin'
+uci commit uhttpd
 
 # Copy PIN registration CGI script to cgi-bin directory
 echo "Setting up PIN registration handler..."
 cp "$SCRIPTS_DIR/pin-register.cgi" "$CGI_DIR/pin-register"
 chmod +x "$CGI_DIR/pin-register"
-
-# Configure uhttpd to handle CGI scripts
-echo "Configuring web server for CGI scripts..."
-uci set uhttpd.main.interpreter='.cgi=/bin/sh'
-uci set uhttpd.main.cgi_prefix='/cgi-bin'
-uci commit uhttpd
-/etc/init.d/uhttpd restart
 
 # Set PIN registration page as the default splash
 echo "Setting up initial PIN registration page..."
@@ -170,6 +156,27 @@ cp "$WWW_DIR/index.html" "$WWW_DIR/pin-registration.html"
 # Configure the system for customer self-activation
 echo "Setting up self-activation mode..."
 touch "$INSTALL_DIR/self_activate_mode"
+
+# All services and restarts happen at the end
+echo "Enabling and starting services..."
+/etc/init.d/nodogsplash enable
+/etc/init.d/cron enable
+
+# Restart all services at the end
+echo "Applying all configurations..."
+/etc/init.d/firewall restart
+/etc/init.d/uhttpd restart
+/etc/init.d/cron start
+
+echo "Setting up captive portal detection..."
+# Force captive portal detection by routing to CaptiFi site
+route add -host captive.apple.com gw 192.168.2.1
+route add -host connectivitycheck.gstatic.com gw 192.168.2.1
+
+# Start Nodogsplash last
+echo "Starting captive portal service..."
+/etc/init.d/nodogsplash start
+
 
 # Skip immediate activation - this will be done by customers using the splash page
 echo "Device is now in self-activation mode."
