@@ -70,6 +70,34 @@ rm /tmp/captifi_firewall.rule
 # Restart firewall
 /etc/init.d/firewall restart
 
+# Configure wireless networks
+echo "Configuring wireless networks to 'CaptiFi Setup'..."
+# Try to set both radio0 and radio1 if they exist
+if [ -f /etc/config/wireless ]; then
+  # Check for radio0 and set its SSID
+  if uci show wireless | grep -q "wireless.radio0"; then
+    echo "Setting radio0 SSID to 'CaptiFi Setup'..."
+    uci set wireless.default_radio0.ssid='CaptiFi Setup'
+    # Make sure the interface is enabled
+    uci set wireless.default_radio0.disabled='0'
+  fi
+  
+  # Check for radio1 and set its SSID
+  if uci show wireless | grep -q "wireless.radio1"; then
+    echo "Setting radio1 SSID to 'CaptiFi Setup'..."
+    uci set wireless.default_radio1.ssid='CaptiFi Setup'
+    # Make sure the interface is enabled
+    uci set wireless.default_radio1.disabled='0'
+  fi
+  
+  # Commit changes and restart wireless
+  uci commit wireless
+  wifi reload
+  echo "Wireless configuration updated."
+else
+  echo "Warning: Wireless configuration not found."
+fi
+
 # Configure Nodogsplash
 echo "Configuring Nodogsplash..."
 cp $CONFIG_DIR/nodogsplash.config /etc/config/nodogsplash

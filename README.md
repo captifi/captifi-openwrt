@@ -6,12 +6,13 @@ This repository contains scripts to integrate OpenWRT devices with CaptiFi's cap
 
 This integration creates a customer-friendly deployment system where:
 
-1. Customers connect to the WiFi and see a PIN registration splash page
-2. They enter their CaptiFi PIN to activate the device
-3. Upon successful activation, the system fetches and displays their custom splash page
-4. The activated device maintains communication with CaptiFi via heartbeats
-5. Guest data is collected and sent to CaptiFi
-6. The device receives and processes commands from CaptiFi
+1. The WiFi network name is set to "CaptiFi Setup" during installation
+2. Customers connect to the WiFi and see a PIN registration splash page
+3. They enter their CaptiFi PIN to activate the device
+4. Upon successful activation, the system fetches and displays their custom splash page
+5. The activated device maintains communication with CaptiFi via heartbeats
+6. Guest data is collected and sent to CaptiFi
+7. The device receives and processes commands from CaptiFi
 
 ## Quick Installation
 
@@ -47,10 +48,11 @@ The integration consists of the following components:
 
 1. **Initial Setup**:
    - When the device is first installed, it's configured with a generic PIN registration splash page
+   - Both WiFi networks (2.4GHz and 5GHz) are renamed to "CaptiFi Setup"
    - No activation PIN is required during installation
 
 2. **Customer First Connection**:
-   - When a customer connects to the WiFi, they see the PIN registration page
+   - When a customer connects to the "CaptiFi Setup" WiFi, they see the PIN registration page
    - They enter their CaptiFi PIN to activate the device
    - The PIN is submitted to a CGI script that processes the activation
 

@@ -36,6 +36,41 @@ else
   echo "Firewall rule not found."
 fi
 
+# Restore original wireless configuration
+echo "Restoring wireless configuration..."
+if [ -f /etc/config/wireless ]; then
+  # Ask if the user wants to reset the SSID
+  echo ""
+  echo "Do you want to reset the 'CaptiFi Setup' WiFi name?"
+  echo "Enter 'y' to reset or any other key to leave as is:"
+  read RESET_WIFI
+  
+  if [ "$RESET_WIFI" = "y" ] || [ "$RESET_WIFI" = "Y" ]; then
+    echo "Resetting WiFi names..."
+    
+    # Reset radio0 if it has CaptiFi Setup name
+    if uci show wireless | grep -q "wireless.default_radio0.ssid='CaptiFi Setup'"; then
+      echo "Resetting radio0 SSID to default..."
+      uci set wireless.default_radio0.ssid='OpenWrt'
+    fi
+    
+    # Reset radio1 if it has CaptiFi Setup name
+    if uci show wireless | grep -q "wireless.default_radio1.ssid='CaptiFi Setup'"; then
+      echo "Resetting radio1 SSID to default..."
+      uci set wireless.default_radio1.ssid='OpenWrt'
+    fi
+    
+    # Commit changes and restart wireless
+    uci commit wireless
+    wifi reload
+    echo "Wireless configuration reset to default."
+  else
+    echo "Wireless configuration left unchanged."
+  fi
+else
+  echo "Wireless configuration not found."
+fi
+
 # Remove files
 echo "Removing files..."
 rm -rf /etc/captifi
