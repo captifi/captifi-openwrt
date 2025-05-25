@@ -1,107 +1,157 @@
 #!/bin/sh
 
 # CaptiFi OpenWRT Integration - Fetch Splash Page Script
-# This script fetches the splash page from CaptiFi API
-# After activation, it replaces the PIN registration page with the actual splash page
+# This script fetches the splash page from CaptiFi API using curl
 
-# Base variables
 INSTALL_DIR="/etc/captifi"
 SERVER_URL="https://app.captifi.io"
 API_ENDPOINT="/api/splash-page"
-OUTPUT_DIR="/www"
-OUTPUT_FILE="$OUTPUT_DIR/splash.html"
+OUTPUT_FILE="/www/splash.html"
+BACKUP_FILE="/www/splash-backup.html"
+LOG_FILE="/tmp/captifi_fetch.log"
 
-# Check if API key exists
+# Log function
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+}
+
+log "Starting splash page fetch..."
+
+# Check for API key
 if [ ! -f "$INSTALL_DIR/api_key" ]; then
-  echo "Error: API key not found. Please activate your device first."
+  log "API key not found. Please activate device first."
   exit 1
 fi
 
-# Get API key
 API_KEY=$(cat "$INSTALL_DIR/api_key")
+log "Using API Key: ${API_KEY:0:6}...${API_KEY: -6}"
 
-echo "Fetching splash page from CaptiFi..."
-
-# Temporarily disable internet blocking for API access
-echo "Temporarily allowing internet access for splash page download..."
-CAPTIFI_RULE=$(uci show firewall | grep -o "@rule.*CaptiFi-Block-Internet.*" | cut -d'.' -f1 | head -n 1)
-if [ -n "$CAPTIFI_RULE" ]; then
-  # Temporarily disable the rule by setting enabled to 0
-  uci set firewall.${CAPTIFI_RULE}.enabled='0'
-  uci commit firewall
-  /etc/init.d/firewall restart
-  echo "Internet access temporarily enabled"
-else
-  echo "No internet blocking rule found to disable"
+# First, backup current splash page if it exists
+if [ -f "${OUTPUT_FILE}" ]; then
+  cp "${OUTPUT_FILE}" "${BACKUP_FILE}"
+  log "Backed up current splash page"
 fi
 
-# Fetch the splash page - BusyBox compatible wget
-# Note: Without header support, we need to ensure the API accepts the key in the URL
-# Create URL with API key as query parameter
-FETCH_URL="${SERVER_URL}${API_ENDPOINT}?api_key=${API_KEY}"
-wget -q -O ${OUTPUT_FILE} "${FETCH_URL}"
-WGET_STATUS=$?
+# Fetch splash page with curl
+log "Fetching splash page from ${SERVER_URL}${API_ENDPOINT}..."
+RESP_FILE="/tmp/captifi_splash_response.txt"
+curl -s -k -X GET -H "Authorization: ${API_KEY}" ${SERVER_URL}${API_ENDPOINT} -o ${RESP_FILE}
+CURL_STATUS=$?
 
-# Re-enable the firewall rule
-if [ -n "$CAPTIFI_RULE" ]; then
-  uci set firewall.${CAPTIFI_RULE}.enabled='1'
-  uci commit firewall
-  /etc/init.d/firewall restart
-  echo "Internet blocking re-enabled"
-fi
-
-# Check if wget command was successful
-if [ $? -ne 0 ]; then
-  echo "Error: Failed to fetch splash page from CaptiFi server."
-  exit 1
-fi
-
-# Verify the splash page was downloaded
-if [ -f "$OUTPUT_FILE" ] && [ -s "$OUTPUT_FILE" ]; then
-  # Check if the file contains HTML
-  if grep -q "<!DOCTYPE html>" "$OUTPUT_FILE" || grep -q "<html" "$OUTPUT_FILE"; then
-    echo "Splash page downloaded successfully to $OUTPUT_FILE"
-    
-    # Check if we were in self-activation mode
-    if [ -f "$INSTALL_DIR/self_activate_mode" ]; then
-      echo "Switching from PIN registration to customer splash page..."
-      
-      # Copy the splash page to index.html to replace the PIN registration page
-      cp "$OUTPUT_FILE" "$OUTPUT_DIR/index.html"
-      
-      # Keep a backup of the PIN registration page in case we need it again
-      if [ ! -f "$OUTPUT_DIR/pin-registration.html" ]; then
-        cp "$OUTPUT_DIR/index.html" "$OUTPUT_DIR/pin-registration.html"
-      fi
-    fi
-    
-    # Update Nodogsplash configuration to use this splash page
-    if [ -f /etc/config/nodogsplash ]; then
-      # In self-activation mode, we use index.html as the splash
-      # After activation, we continue using index.html but with the customer's content
-      uci set nodogsplash.@nodogsplash[0].splashpage="$OUTPUT_DIR/index.html"
-      uci commit nodogsplash
-      
-      # Restart Nodogsplash to apply changes
-      /etc/init.d/nodogsplash restart
-      
-      echo "Nodogsplash configuration updated and service restarted."
-    else
-      echo "Warning: Nodogsplash configuration not found."
-    fi
-    
-    # Create success marker
-    touch "$INSTALL_DIR/splash_updated"
-    
-    exit 0
-  else
-    echo "Error: Downloaded file is not a valid HTML splash page."
-    # Save the response for debugging
-    mv "$OUTPUT_FILE" "$OUTPUT_FILE.error"
-    echo "Response saved to $OUTPUT_FILE.error for debugging."
-    exit 1
+if [ $CURL_STATUS -ne 0 ]; then
+  log "Error: Failed to fetch splash page (status: $CURL_STATUS)."
+  # Restore from backup if it exists
+  if [ -f "${BACKUP_FILE}" ]; then
+    cp "${BACKUP_FILE}" "${OUTPUT_FILE}"
+    log "Restored splash page from backup"
   fi
-else
-  echo "Error: Failed to download splash page or file is empty."
   exit 1
 fi
+
+# Check if response is a JSON error message
+if grep -q '"success":false' "${RESP_FILE}"; then
+  ERROR_MSG=$(grep -o '"message":"[^"]*"' "${RESP_FILE}" | cut -d'"' -f4)
+  log "Error: Server returned error: $ERROR_MSG"
+  log "Using default splash page instead"
+  
+  # Use our default splash page template
+  cat << 'HTML' > "${OUTPUT_FILE}"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CaptiFi Guest WiFi</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; text-align: center; }
+        .header { color: #4285f4; }
+        .button { background-color: #4CAF50; border: none; color: white;
+                 padding: 15px 32px; text-align: center; font-size: 16px;
+                 margin: 20px 0; cursor: pointer; border-radius: 8px;
+                 text-decoration: none; display: inline-block; }
+        .footer { margin-top: 50px; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1 class="header">Welcome to Guest WiFi</h1>
+    
+    <p>Thank you for visiting.</p>
+    <p>Click the button below to connect to the internet.</p>
+    
+    <form action="/cgi-bin/auth" method="post">
+        <input type="hidden" name="accept" value="true">
+        <button type="submit" class="button">Connect to Internet</button>
+    </form>
+    
+    <div class="footer">
+        <p>Powered by CaptiFi - WiFi Marketing Solution</p>
+        <p>Device ID: <span id="mac-address">Loading...</span></p>
+        <script>
+            fetch('/cgi-bin/get-mac')
+              .then(response => response.text())
+              .then(mac => {
+                document.getElementById('mac-address').textContent = mac;
+              });
+        </script>
+    </div>
+</body>
+</html>
+HTML
+else
+  # It's not a JSON error response, so hopefully it's HTML content
+  mv "${RESP_FILE}" "${OUTPUT_FILE}"
+  
+  # Verify it's a valid HTML file
+  if ! grep -q "<html" "${OUTPUT_FILE}"; then
+    log "Error: Downloaded content doesn't appear to be valid HTML."
+    log "Response content: $(cat ${OUTPUT_FILE})"
+    log "Using default splash page instead"
+    
+    # Use our default splash page template
+    cat << 'HTML' > "${OUTPUT_FILE}"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CaptiFi Guest WiFi</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; text-align: center; }
+        .header { color: #4285f4; }
+        .button { background-color: #4CAF50; border: none; color: white;
+                 padding: 15px 32px; text-align: center; font-size: 16px;
+                 margin: 20px 0; cursor: pointer; border-radius: 8px;
+                 text-decoration: none; display: inline-block; }
+        .footer { margin-top: 50px; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1 class="header">Welcome to Guest WiFi</h1>
+    
+    <p>Thank you for visiting.</p>
+    <p>Click the button below to connect to the internet.</p>
+    
+    <form action="/cgi-bin/auth" method="post">
+        <input type="hidden" name="accept" value="true">
+        <button type="submit" class="button">Connect to Internet</button>
+    </form>
+    
+    <div class="footer">
+        <p>Powered by CaptiFi - WiFi Marketing Solution</p>
+        <p>Device ID: <span id="mac-address">Loading...</span></p>
+        <script>
+            fetch('/cgi-bin/get-mac')
+              .then(response => response.text())
+              .then(mac => {
+                document.getElementById('mac-address').textContent = mac;
+              });
+        </script>
+    </div>
+</body>
+</html>
+HTML
+  else
+    log "Valid HTML content received."
+  fi
+fi
+
+# Copy to index.html
+cp ${OUTPUT_FILE} /www/index.html
+log "Splash page updated successfully."
+exit 0

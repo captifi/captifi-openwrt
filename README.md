@@ -44,7 +44,7 @@ If you prefer to install the components manually, follow these steps:
 1. Install required packages:
 ```bash
 opkg update
-opkg install curl uhttpd
+opkg install curl uhttpd iptables iptables-mod-nat-extra
 ```
 
 2. Create required directories:
@@ -114,7 +114,43 @@ The router's admin interface remains accessible at:
 http://<router-ip>/cgi-bin/luci/
 ```
 
+## Features
+
+- PIN-based device activation
+- Direct API communication with CaptiFi servers
+- Guest WiFi splash page with Terms of Service acceptance
+- Automated heartbeat reporting to CaptiFi
+- SSH-safe implementation (no SSH lockout issues)
+- No dependency on nodogsplash or other captive portal packages
+- Robust error handling and fallback mechanisms
+- Automatic backup and recovery for splash pages
+
 ## Troubleshooting
+
+### Captive Portal Redirection
+
+If captive portal redirection isn't working:
+
+1. Verify iptables is installed:
+```bash
+which iptables
+```
+
+2. If not installed, install it:
+```bash
+opkg update
+opkg install iptables iptables-mod-nat-extra
+```
+
+3. Enable captive portal redirection:
+```bash
+/etc/captifi/scripts/captive-redirect.sh enable
+```
+
+4. Check status:
+```bash
+/etc/captifi/scripts/captive-redirect.sh status
+```
 
 ### API Connection Issues
 
