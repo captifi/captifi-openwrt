@@ -2,6 +2,7 @@
 
 # CaptiFi OpenWRT Integration - WiFi Management Test Script
 # This script allows testing the WiFi management functionality
+# V1.1 - Updated with multi-interface support
 
 # Terminal colors
 RED='\033[0;31m'
@@ -44,19 +45,32 @@ show_current_wifi() {
   echo "${BLUE}Current WiFi Settings:${NC}"
   
   if command -v uci &> /dev/null; then
-    SSID=$(uci get wireless.@wifi-iface[0].ssid 2>/dev/null || echo "Not set")
-    ENCRYPTION=$(uci get wireless.@wifi-iface[0].encryption 2>/dev/null || echo "Not set")
+    # Count WiFi interfaces
+    IFACE_COUNT=0
+    while uci get wireless.@wifi-iface[$IFACE_COUNT] > /dev/null 2>&1; do
+      IFACE_COUNT=$((IFACE_COUNT+1))
+    done
     
-    if [ "$ENCRYPTION" = "none" ]; then
-      PASSWORD="Open network (no password)"
-    else
-      PASSWORD=$(uci get wireless.@wifi-iface[0].key 2>/dev/null || echo "Not set")
-      PASSWORD="********" # Mask the actual password for security
-    fi
+    echo "Found ${IFACE_COUNT} WiFi interfaces:"
+    echo ""
     
-    echo "SSID: $SSID"
-    echo "Encryption: $ENCRYPTION"
-    echo "Password: $PASSWORD"
+    # Display settings for each interface
+    for i in $(seq 0 $((IFACE_COUNT-1))); do
+      DEVICE=$(uci get wireless.@wifi-iface[$i].device 2>/dev/null || echo "Unknown")
+      SSID=$(uci get wireless.@wifi-iface[$i].ssid 2>/dev/null || echo "Not set")
+      ENCRYPTION=$(uci get wireless.@wifi-iface[$i].encryption 2>/dev/null || echo "Not set")
+      
+      echo "${BLUE}Interface $i (Device: $DEVICE):${NC}"
+      echo "  SSID: $SSID"
+      echo "  Encryption: $ENCRYPTION"
+      
+      if [ "$ENCRYPTION" = "none" ]; then
+        echo "  Password: Open network (no password)"
+      else
+        echo "  Password: ********" # Mask the actual password for security
+      fi
+      echo ""
+    done
   else
     echo "${RED}UCI command not available. Cannot read WiFi settings.${NC}"
   fi
@@ -103,6 +117,12 @@ test_api() {
   if [ $? -eq 0 ]; then
     echo "${GREEN}API is responsive!${NC}"
     echo "Response: $RESPONSE"
+    
+    # Extract WiFi interface count
+    WIFI_INTERFACES=$(echo "$RESPONSE" | grep -o '"wifi_interfaces":[0-9]*' | cut -d':' -f2)
+    if [ -n "$WIFI_INTERFACES" ] && [ "$WIFI_INTERFACES" -gt 0 ]; then
+      echo "${GREEN}Found $WIFI_INTERFACES WiFi interface(s) that will be updated simultaneously${NC}"
+    fi
   else
     echo "${RED}Error: API endpoint is not responding.${NC}"
     echo "Make sure the CGI script is properly installed and executable."

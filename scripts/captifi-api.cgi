@@ -2,6 +2,7 @@
 
 # CaptiFi OpenWRT Integration - API Handler
 # This script processes direct API requests for WiFi management and other commands
+# V1.1 - Updated with multi-interface support
 
 # Required headers for CGI script
 echo "Content-type: application/json"
@@ -93,29 +94,40 @@ case "$COMMAND" in
         
         # Update WiFi settings
         if command -v uci &> /dev/null; then
-            # Set SSID
-            uci set wireless.@wifi-iface[0].ssid="$WIFI_SSID"
+            # Updated to support multiple WiFi interfaces
+            IFACE_COUNT=0
+            INTERFACES_UPDATED=0
             
-            # Set encryption and password if provided
-            if [ -n "$WIFI_PASSWORD" ]; then
-                uci set wireless.@wifi-iface[0].encryption="$WIFI_ENCRYPTION"
-                uci set wireless.@wifi-iface[0].key="$WIFI_PASSWORD"
-                log "Setting WiFi password and encryption type: $WIFI_ENCRYPTION"
-            else
-                # No password = open network
-                uci set wireless.@wifi-iface[0].encryption="none"
-                uci delete wireless.@wifi-iface[0].key 2>/dev/null || true
-                log "Setting WiFi as open network (no password)"
-            fi
+            # Loop through all WiFi interfaces
+            while uci get wireless.@wifi-iface[$IFACE_COUNT] > /dev/null 2>&1; do
+                # Set SSID for each interface
+                uci set wireless.@wifi-iface[$IFACE_COUNT].ssid="$WIFI_SSID"
+                
+                # Set encryption and password if provided
+                if [ -n "$WIFI_PASSWORD" ]; then
+                    log "Setting interface $IFACE_COUNT with password and encryption type: $WIFI_ENCRYPTION"
+                    uci set wireless.@wifi-iface[$IFACE_COUNT].encryption="$WIFI_ENCRYPTION"
+                    uci set wireless.@wifi-iface[$IFACE_COUNT].key="$WIFI_PASSWORD"
+                else
+                    # No password = open network
+                    log "Setting interface $IFACE_COUNT as open network (no password)"
+                    uci set wireless.@wifi-iface[$IFACE_COUNT].encryption="none"
+                    uci delete wireless.@wifi-iface[$IFACE_COUNT].key 2>/dev/null || true
+                fi
+                
+                INTERFACES_UPDATED=$((INTERFACES_UPDATED+1))
+                IFACE_COUNT=$((IFACE_COUNT+1))
+            done
             
             # Apply changes
             uci commit wireless
             
-            # Restart wireless to apply changes (with delay to allow response)
-            echo '{"success":true,"message":"WiFi settings updated","ssid":"'$WIFI_SSID'"}'
+            # Response with success message
+            echo '{"success":true,"message":"WiFi settings updated","ssid":"'$WIFI_SSID'","interfaces_updated":'$INTERFACES_UPDATED'}'
+            
             # Use background process to restart wireless after sending response
             (sleep 2 && wifi reload) &
-            log "WiFi settings updated successfully"
+            log "WiFi settings updated on $INTERFACES_UPDATED interfaces"
         else
             echo '{"success":false,"message":"UCI command not available"}'
             log "Error: UCI command not available"
@@ -157,7 +169,13 @@ case "$COMMAND" in
         MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "OpenWRT")
         WIFI_SSID=$(uci get wireless.@wifi-iface[0].ssid 2>/dev/null || echo "Unknown")
         
-        echo "{\"success\":true,\"message\":\"Device status\",\"uptime\":$UPTIME,\"mac_address\":\"$MAC_ADDRESS\",\"hostname\":\"$HOSTNAME\",\"model\":\"$MODEL\",\"wifi_ssid\":\"$WIFI_SSID\"}"
+        # Count WiFi interfaces
+        WIFI_INTERFACES=0
+        while uci get wireless.@wifi-iface[$WIFI_INTERFACES] > /dev/null 2>&1; do
+            WIFI_INTERFACES=$((WIFI_INTERFACES+1))
+        done
+        
+        echo "{\"success\":true,\"message\":\"Device status\",\"uptime\":$UPTIME,\"mac_address\":\"$MAC_ADDRESS\",\"hostname\":\"$HOSTNAME\",\"model\":\"$MODEL\",\"wifi_ssid\":\"$WIFI_SSID\",\"wifi_interfaces\":$WIFI_INTERFACES}"
         log "Status requested and returned"
         ;;
         

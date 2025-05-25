@@ -2,7 +2,7 @@
 
 # CaptiFi OpenWRT Integration - Heartbeat Script
 # This script sends heartbeat to CaptiFi API using curl
-# V2.1 - Added WiFi management capabilities
+# V2.2 - Added multi-interface WiFi management capabilities
 
 INSTALL_DIR="/etc/captifi"
 SERVER_URL="https://app.captifi.io"
@@ -139,21 +139,31 @@ while [ $RETRY -lt $MAX_RETRIES ] && [ "$SUCCESS" != "true" ]; do
             [ -z "$WIFI_ENCRYPTION" ] && WIFI_ENCRYPTION="psk2"
             
             if [ -n "$WIFI_SSID" ] && command -v uci &> /dev/null; then
-              # Set SSID
-              log "Updating WiFi SSID to: $WIFI_SSID"
-              uci set wireless.@wifi-iface[0].ssid="$WIFI_SSID"
+              # Updated to loop through all available WiFi interfaces
+              log "Updating all WiFi interfaces with SSID: $WIFI_SSID"
               
-              # Set encryption and password if provided
-              if [ -n "$WIFI_PASSWORD" ]; then
-                log "Setting WiFi password and encryption type: $WIFI_ENCRYPTION"
-                uci set wireless.@wifi-iface[0].encryption="$WIFI_ENCRYPTION"
-                uci set wireless.@wifi-iface[0].key="$WIFI_PASSWORD"
-              else
-                # No password = open network
-                log "Setting WiFi as open network (no password)"
-                uci set wireless.@wifi-iface[0].encryption="none"
-                uci delete wireless.@wifi-iface[0].key 2>/dev/null || true
-              fi
+              # Count how many wifi-iface sections exist
+              IFACE_COUNT=0
+              while uci get wireless.@wifi-iface[$IFACE_COUNT] > /dev/null 2>&1; do
+                # Set SSID for each interface
+                uci set wireless.@wifi-iface[$IFACE_COUNT].ssid="$WIFI_SSID"
+                
+                # Set encryption and password if provided
+                if [ -n "$WIFI_PASSWORD" ]; then
+                  log "Setting interface $IFACE_COUNT with password and encryption type: $WIFI_ENCRYPTION"
+                  uci set wireless.@wifi-iface[$IFACE_COUNT].encryption="$WIFI_ENCRYPTION"
+                  uci set wireless.@wifi-iface[$IFACE_COUNT].key="$WIFI_PASSWORD"
+                else
+                  # No password = open network
+                  log "Setting interface $IFACE_COUNT as open network (no password)"
+                  uci set wireless.@wifi-iface[$IFACE_COUNT].encryption="none"
+                  uci delete wireless.@wifi-iface[$IFACE_COUNT].key 2>/dev/null || true
+                fi
+                
+                IFACE_COUNT=$((IFACE_COUNT+1))
+              done
+              
+              log "Updated $IFACE_COUNT WiFi interfaces"
               
               # Apply changes
               uci commit wireless
@@ -162,7 +172,7 @@ while [ $RETRY -lt $MAX_RETRIES ] && [ "$SUCCESS" != "true" ]; do
               log "Restarting wireless interface to apply changes"
               wifi reload
               
-              log "WiFi settings updated: SSID=$WIFI_SSID"
+              log "WiFi settings updated on all interfaces: SSID=$WIFI_SSID"
             else
               log "Failed to update WiFi settings: missing SSID or UCI command"
             fi
