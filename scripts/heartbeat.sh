@@ -1,137 +1,144 @@
 #!/bin/sh
 
 # CaptiFi OpenWRT Integration - Heartbeat Script
-# This script sends periodic heartbeats to CaptiFi and processes commands
+# This script sends heartbeat to CaptiFi API using curl
+# V2.0 - Enhanced error handling and retry logic
 
-# Base variables
 INSTALL_DIR="/etc/captifi"
-SCRIPTS_DIR="$INSTALL_DIR/scripts"
 SERVER_URL="https://app.captifi.io"
 API_ENDPOINT="/api/plug-and-play/heartbeat"
-LOG_FILE="$INSTALL_DIR/heartbeat.log"
+LOG_FILE="/tmp/captifi_heartbeat.log"
+MAX_RETRIES=3
+RETRY_DELAY=5
 
-# Ensure log file exists
-touch "$LOG_FILE"
-
-# Rotate log if it gets too large (> 100KB)
-if [ -f "$LOG_FILE" ] && [ $(stat -c%s "$LOG_FILE") -gt 102400 ]; then
-  mv "$LOG_FILE" "$LOG_FILE.old"
-  touch "$LOG_FILE"
-fi
-
+# Log function
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+  # Keep log file size reasonable - only keep last 100 lines
+  if [ -f "$LOG_FILE" ] && [ $(wc -l < "$LOG_FILE") -gt 100 ]; then
+    tail -100 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
+  fi
 }
 
 log "Starting heartbeat..."
 
-# Check if API key exists
+# Check for API key
 if [ ! -f "$INSTALL_DIR/api_key" ]; then
-  log "Error: API key not found. Please activate your device first."
+  log "API key not found. Please activate device first."
   exit 1
 fi
 
-# Get API key
-API_KEY=$(cat "$INSTALL_DIR/api_key")
-
 # Get device information
-MAC_ADDRESS=$(ifconfig br-lan | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -n 1)
+API_KEY=$(cat "$INSTALL_DIR/api_key")
+MAC_ADDRESS=$(ifconfig br-lan 2>/dev/null | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -n 1)
+
+# If br-lan interface doesn't exist, try other common interfaces
 if [ -z "$MAC_ADDRESS" ]; then
-  # Try alternative interfaces if br-lan doesn't exist
-  MAC_ADDRESS=$(ifconfig eth0 | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -n 1)
+  for iface in eth0 eth1 wlan0 wlan1; do
+    MAC_ADDRESS=$(ifconfig $iface 2>/dev/null | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -n 1)
+    if [ -n "$MAC_ADDRESS" ]; then
+      break
+    fi
+  done
+  
+  # Last resort: get any MAC address from any interface
   if [ -z "$MAC_ADDRESS" ]; then
-    # Try to get any MAC address
     MAC_ADDRESS=$(ifconfig | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -n 1)
+    if [ -z "$MAC_ADDRESS" ]; then
+      log "Error: Could not find a valid MAC address"
+      MAC_ADDRESS="00:00:00:00:00:00"  # Fallback default
+    fi
   fi
 fi
 
-# Get system uptime in seconds
-UPTIME=$(cat /proc/uptime | awk '{print $1}')
+UPTIME=$(cat /proc/uptime | cut -d' ' -f1)
+HOSTNAME=$(cat /proc/sys/kernel/hostname)
+CONNECTIONS=$(cat /proc/net/nf_conntrack 2>/dev/null | wc -l || echo "0")
+MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "OpenWRT")
 
-# Temporarily disable internet blocking for API access
-log "Temporarily allowing internet access for heartbeat..."
-CAPTIFI_RULE=$(uci show firewall | grep -o "@rule.*CaptiFi-Block-Internet.*" | cut -d'.' -f1 | head -n 1)
-if [ -n "$CAPTIFI_RULE" ]; then
-  # Temporarily disable the rule by setting enabled to 0
-  uci set firewall.${CAPTIFI_RULE}.enabled='0'
-  uci commit firewall
-  /etc/init.d/firewall restart
-  log "Internet access temporarily enabled"
-else
-  log "No internet blocking rule found to disable"
+# Enhanced payload with additional system information
+JSON="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\",\"hostname\":\"${HOSTNAME}\",\"connections\":${CONNECTIONS},\"model\":\"${MODEL}\"}"
+
+log "Sending heartbeat with payload: $JSON"
+
+# DNS resolution check
+if ! nslookup app.captifi.io > /dev/null 2>&1; then
+  log "DNS resolution failing, adding static host entry"
+  grep -q "app.captifi.io" /etc/hosts || echo "157.230.53.133 app.captifi.io" >> /etc/hosts
 fi
 
-# Send heartbeat with full debug output
-log "Sending heartbeat to CaptiFi (MAC: $MAC_ADDRESS, Uptime: $UPTIME)"
-log "API Endpoint: ${SERVER_URL}${API_ENDPOINT}"
-log "API Key: ${API_KEY:0:6}...${API_KEY: -6}"
-
-# Save request payload for debugging
-REQUEST_PAYLOAD="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\"}"
-log "Request payload: $REQUEST_PAYLOAD"
-
-# Create a temporary file for response
-RESP_FILE="/tmp/captifi_heartbeat_response.txt"
-
-# Send request with BusyBox compatible wget
-log "Sending heartbeat request..."
-wget -q -O "$RESP_FILE" --post-data="$REQUEST_PAYLOAD" \
-    ${SERVER_URL}${API_ENDPOINT} 2>> "$LOG_FILE"
-
-# Check if wget command was successful
-WGET_STATUS=$?
-
-# Re-enable the firewall rule
-if [ -n "$CAPTIFI_RULE" ]; then
-  uci set firewall.${CAPTIFI_RULE}.enabled='1'
-  uci commit firewall
-  /etc/init.d/firewall restart
-  log "Internet blocking re-enabled"
-fi
-
-if [ $WGET_STATUS -ne 0 ]; then
-  log "Error: Failed to connect to CaptiFi server. wget exit code: $WGET_STATUS"
-  log "Command: wget -q -O $RESP_FILE --post-data=[payload] ${SERVER_URL}${API_ENDPOINT}"
-  exit 1
-fi
-
-# Read response from temp file
-RESPONSE=$(cat "$RESP_FILE" 2>/dev/null)
-log "Response received: $RESPONSE"
-rm -f "$RESP_FILE"
-
-# Update last heartbeat timestamp
-echo "$(date +%s)" > "$INSTALL_DIR/last_heartbeat"
-
-# Check for commands
-if echo "$RESPONSE" | grep -q "\"command\":"; then
-    COMMAND=$(echo "$RESPONSE" | grep -o '"command":"[^"]*"' | cut -d'"' -f4)
-    log "Received command: $COMMAND"
+# Send heartbeat with retries
+RETRY=0
+SUCCESS=false
+while [ $RETRY -lt $MAX_RETRIES ] && [ "$SUCCESS" != "true" ]; do
+  RESP_FILE="/tmp/heartbeat_response.txt"
+  
+  # Verbose logging for debugging
+  log "Attempt $((RETRY+1)) of $MAX_RETRIES connecting to $SERVER_URL$API_ENDPOINT"
+  
+  # Using -k to ignore SSL verification issues that might occur on OpenWRT
+  curl -s -k -X POST \
+       -H "Content-Type: application/json" \
+       -H "Connection: close" \
+       -d "$JSON" \
+       --connect-timeout 10 \
+       --max-time 20 \
+       ${SERVER_URL}${API_ENDPOINT} > "$RESP_FILE" 2>> "$LOG_FILE"
+  
+  CURL_STATUS=$?
+  
+  if [ $CURL_STATUS -eq 0 ] && [ -s "$RESP_FILE" ]; then
+    RESPONSE=$(cat "$RESP_FILE")
+    log "Heartbeat response: $RESPONSE"
     
-    case "$COMMAND" in
-        "fetch_splash")
+    # Validate response format - look for valid JSON response
+    if echo "$RESPONSE" | grep -q -E '^\{.*\}$'; then
+      SUCCESS=true
+      
+      # Check for commands in response
+      if echo "$RESPONSE" | grep -q '"command":'; then
+        COMMAND=$(echo "$RESPONSE" | grep -o '"command":"[^"]*"' | cut -d'"' -f4)
+        log "Received command: $COMMAND"
+        
+        case "$COMMAND" in
+          "fetch_splash")
             log "Executing command: fetch_splash"
-            # Get splash page name if available
-            SPLASH_PAGE=$(echo "$RESPONSE" | grep -o '"splash_page":"[^"]*"' | cut -d'"' -f4)
-            if [ -n "$SPLASH_PAGE" ]; then
-                log "Fetching splash page: $SPLASH_PAGE"
-            fi
-            # Run fetch splash script
-            "$SCRIPTS_DIR/fetch-splash.sh"
+            $SCRIPTS_DIR/fetch-splash.sh
             ;;
-        "reboot")
+          "reboot")
             log "Executing command: reboot"
-            # Schedule reboot after a short delay to allow response
-            (sleep 10 && reboot) &
+            reboot
             ;;
-        *)
+          *)
             log "Unknown command: $COMMAND"
             ;;
-    esac
+        esac
+      fi
+      
+      # Record last successful heartbeat time
+      date +%s > "$INSTALL_DIR/last_heartbeat"
+      echo "$RESPONSE" > "$INSTALL_DIR/last_response"
+    else
+      log "Error: Received malformed response"
+      RETRY=$((RETRY+1))
+    fi
+  else
+    log "Error: Heartbeat failed with curl status $CURL_STATUS"
+    RETRY=$((RETRY+1))
+    
+    if [ $RETRY -lt $MAX_RETRIES ]; then
+      log "Retrying in $RETRY_DELAY seconds..."
+      sleep $RETRY_DELAY
+    fi
+  fi
+  
+  rm -f "$RESP_FILE"
+done
+
+if [ "$SUCCESS" = "true" ]; then
+  log "Heartbeat completed successfully"
 else
-    log "No commands received."
+  log "All heartbeat attempts failed"
 fi
 
-# Update status with success
-log "Heartbeat completed successfully."
 exit 0
