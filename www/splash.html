@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CaptiFi Device Activation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            text-align: center;
+            background-color: #f5f7fa;
+        }
+        .container { 
+            max-width: 500px; 
+            margin: 20px auto; 
+            background: #ffffff; 
+            padding: 30px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .logo {
+            max-width: 200px;
+            margin-bottom: 20px;
+        }
+        h1 { 
+            color: #0066cc; 
+            margin-top: 0;
+        }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            box-sizing: border-box; 
+            border: 1px solid #ddd; 
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button { 
+            background: #0066cc; 
+            color: white; 
+            border: none; 
+            padding: 12px 20px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover { 
+            background: #0055bb; 
+        }
+        .mac { 
+            background: #eee; 
+            padding: 8px; 
+            border-radius: 4px; 
+            font-family: monospace;
+            display: inline-block;
+            min-width: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CaptiFi Device Activation</h1>
+        <p>This device needs to be activated with a PIN before it can be used.</p>
+        
+        <p>Device MAC Address: <span id="mac" class="mac">Loading...</span></p>
+        
+        <form action="/cgi-bin/activate.cgi" method="get">
+            <input type="text" name="pin" placeholder="Enter 8-digit activation PIN" pattern="[0-9]{8}" required>
+            <button type="submit">Activate Device</button>
+        </form>
+        
+        <p>Please contact your administrator if you don't have an activation PIN.</p>
+    </div>
+    
+    <script>
+        // Get MAC address
+        fetch('/cgi-bin/get-mac')
+        .then(response => response.text())
+        .then(data => {
+            document.getElementById('mac').textContent = data.trim();
+        })
+        .catch(error => {
+            document.getElementById('mac').textContent = 'Error fetching MAC';
+        });
+    </script>
+</body>
+</html>

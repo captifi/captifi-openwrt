@@ -2,7 +2,7 @@
 
 # CaptiFi OpenWRT Integration - Heartbeat Script
 # This script sends heartbeat to CaptiFi API using curl
-# V2.0 - Enhanced error handling and retry logic
+# V2.2 - Added multi-interface WiFi management capabilities
 
 INSTALL_DIR="/etc/captifi"
 SERVER_URL="https://app.captifi.io"
@@ -43,13 +43,13 @@ if [ -z "$MAC_ADDRESS" ]; then
   
   # Last resort: get any MAC address from any interface
   if [ -z "$MAC_ADDRESS" ]; then
-    MAC_ADDRESS=$(ifconfig | grep -o -E '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -n 1)
-    if [ -z "$MAC_ADDRESS" ]; then
-      log "Error: Could not find a valid MAC address"
-      MAC_ADDRESS="00:00:00:00:00:00"  # Fallback default
-    fi
+    log "Error: Could not find a valid MAC address"
+    MAC_ADDRESS="00:00:00:00:00:00"  # Fallback default
   fi
 fi
+
+# Get WiFi SSID for reporting
+WIFI_SSID=$(uci get wireless.@wifi-iface[0].ssid 2>/dev/null || echo "Unknown")
 
 UPTIME=$(cat /proc/uptime | cut -d' ' -f1)
 HOSTNAME=$(cat /proc/sys/kernel/hostname)
@@ -57,7 +57,7 @@ CONNECTIONS=$(cat /proc/net/nf_conntrack 2>/dev/null | wc -l || echo "0")
 MODEL=$(cat /tmp/sysinfo/model 2>/dev/null || echo "OpenWRT")
 
 # Enhanced payload with additional system information
-JSON="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\",\"hostname\":\"${HOSTNAME}\",\"connections\":${CONNECTIONS},\"model\":\"${MODEL}\"}"
+JSON="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\",\"hostname\":\"${HOSTNAME}\",\"connections\":${CONNECTIONS},\"model\":\"${MODEL}\",\"wifi_ssid\":\"${WIFI_SSID}\"}"
 
 log "Sending heartbeat with payload: $JSON"
 
@@ -103,22 +103,71 @@ while [ $RETRY -lt $MAX_RETRIES ] && [ "$SUCCESS" != "true" ]; do
         case "$COMMAND" in
           "fetch_splash")
             log "Executing command: fetch_splash"
-            $SCRIPTS_DIR/fetch-splash.sh
+            if [ -x "$INSTALL_DIR/fetch-splash-page.sh" ]; then
+              $INSTALL_DIR/fetch-splash-page.sh
+            else
+              log "fetch-splash-page.sh not found or not executable"
+            fi
             ;;
           "reboot")
             log "Executing command: reboot"
             reboot
             ;;
           "reset")
-            log "Executing command: reset device to PIN mode"
-            if [ -f "$INSTALL_DIR/scripts/reset-to-pin-mode.sh" ]; then
-              $INSTALL_DIR/scripts/reset-to-pin-mode.sh --auto
+            log "Executing command: reset"
+            if [ -x "$INSTALL_DIR/reset-device.sh" ]; then
+              $INSTALL_DIR/reset-device.sh
             else
-              log "Error: Reset script not found"
-              # Fall back to manual reset if script not found
-              rm -f "$INSTALL_DIR/api_key" "$INSTALL_DIR/config.json"
-              touch "$INSTALL_DIR/self_activate_mode"
-              log "Removed API key and reset to self-activation mode"
+              log "reset-device.sh not found or not executable"
+            fi
+            ;;
+          "update_wifi")
+            log "Executing command: update_wifi"
+            # Extract WiFi parameters from the response
+            WIFI_SSID=$(echo "$RESPONSE" | grep -o '"ssid":"[^"]*"' | cut -d'"' -f4)
+            WIFI_PASSWORD=$(echo "$RESPONSE" | grep -o '"password":"[^"]*"' | cut -d'"' -f4)
+            WIFI_ENCRYPTION=$(echo "$RESPONSE" | grep -o '"encryption":"[^"]*"' | cut -d'"' -f4)
+            
+            # Set defaults
+            [ -z "$WIFI_ENCRYPTION" ] && WIFI_ENCRYPTION="psk2"
+            
+            if [ -n "$WIFI_SSID" ] && command -v uci &> /dev/null; then
+              # Updated to loop through all available WiFi interfaces
+              log "Updating all WiFi interfaces with SSID: $WIFI_SSID"
+              
+              # Count how many wifi-iface sections exist
+              IFACE_COUNT=0
+              while uci get wireless.@wifi-iface[$IFACE_COUNT] > /dev/null 2>&1; do
+                # Set SSID for each interface
+                uci set wireless.@wifi-iface[$IFACE_COUNT].ssid="$WIFI_SSID"
+                
+                # Set encryption and password if provided
+                if [ -n "$WIFI_PASSWORD" ]; then
+                  log "Setting interface $IFACE_COUNT with password and encryption type: $WIFI_ENCRYPTION"
+                  uci set wireless.@wifi-iface[$IFACE_COUNT].encryption="$WIFI_ENCRYPTION"
+                  uci set wireless.@wifi-iface[$IFACE_COUNT].key="$WIFI_PASSWORD"
+                else
+                  # No password = open network
+                  log "Setting interface $IFACE_COUNT as open network (no password)"
+                  uci set wireless.@wifi-iface[$IFACE_COUNT].encryption="none"
+                  uci delete wireless.@wifi-iface[$IFACE_COUNT].key 2>/dev/null || true
+                fi
+                
+                IFACE_COUNT=$((IFACE_COUNT+1))
+              done
+              
+              log "Updated $IFACE_COUNT WiFi interfaces"
+              
+              # Apply changes
+              uci commit wireless
+              
+              # Restart wireless to apply changes
+              log "Restarting wireless interface to apply changes"
+              wifi reload
+              
+              log "WiFi settings updated on all interfaces: SSID=$WIFI_SSID"
+            else
+              log "Failed to update WiFi settings: missing SSID or UCI command"
             fi
             ;;
           *)
