@@ -50,12 +50,11 @@ UPTIME=$(cat /proc/uptime | awk '{print $1}')
 
 # Send heartbeat
 log "Sending heartbeat to CaptiFi (MAC: $MAC_ADDRESS, Uptime: $UPTIME)"
-RESPONSE=$(curl -s -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\"}" \
+RESPONSE=$(wget -q -O - --header="Content-Type: application/json" \
+    --post-data="{\"mac_address\":\"${MAC_ADDRESS}\",\"uptime\":${UPTIME},\"api_key\":\"${API_KEY}\"}" \
     ${SERVER_URL}${API_ENDPOINT})
 
-# Check if curl command was successful
+# Check if wget command was successful
 if [ $? -ne 0 ]; then
   log "Error: Failed to connect to CaptiFi server."
   exit 1

@@ -85,12 +85,11 @@ JSON_PAYLOAD="{\"api_key\":\"${API_KEY}\",\"mac_address\":\"${MAC_ADDRESS}\",\"g
 
 # Send data to CaptiFi API
 log "Sending guest data to CaptiFi API"
-RESPONSE=$(curl -s -X POST \
-  -H "Content-Type: application/json" \
-  -d "$JSON_PAYLOAD" \
+RESPONSE=$(wget -q -O - --header="Content-Type: application/json" \
+  --post-data="$JSON_PAYLOAD" \
   ${SERVER_URL}${API_ENDPOINT})
 
-# Check if curl command was successful
+# Check if wget command was successful
 if [ $? -ne 0 ]; then
   log "Error: Failed to connect to CaptiFi server."
   echo "Status: 500 Internal Server Error"

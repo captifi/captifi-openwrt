@@ -23,11 +23,10 @@ API_KEY=$(cat "$INSTALL_DIR/api_key")
 echo "Fetching splash page from CaptiFi..."
 
 # Fetch the splash page
-RESPONSE=$(curl -s -H "Authorization: ${API_KEY}" \
-     "${SERVER_URL}${API_ENDPOINT}" \
-     --output ${OUTPUT_FILE})
+wget -q -O ${OUTPUT_FILE} --header="Authorization: ${API_KEY}" \
+     "${SERVER_URL}${API_ENDPOINT}"
 
-# Check if curl command was successful
+# Check if wget command was successful
 if [ $? -ne 0 ]; then
   echo "Error: Failed to fetch splash page from CaptiFi server."
   exit 1

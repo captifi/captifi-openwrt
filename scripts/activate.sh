@@ -45,12 +45,11 @@ echo "PIN: ${PIN:0:4}****"
 echo ""
 
 # Call the activation API
-RESPONSE=$(curl -s -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"pin\":\"${PIN}\",\"box_mac_address\":\"${MAC_ADDRESS}\",\"device_model\":\"${MODEL}\",\"serial\":\"${SERIAL}\"}" \
+RESPONSE=$(wget -q -O - --header="Content-Type: application/json" \
+    --post-data="{\"pin\":\"${PIN}\",\"box_mac_address\":\"${MAC_ADDRESS}\",\"device_model\":\"${MODEL}\",\"serial\":\"${SERIAL}\"}" \
     ${SERVER_URL}${API_ENDPOINT})
 
-# Check if curl command was successful
+# Check if wget command was successful
 if [ $? -ne 0 ]; then
   echo "Error: Failed to connect to CaptiFi server. Please check your internet connection and try again."
   exit 1

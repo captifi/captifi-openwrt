@@ -20,10 +20,12 @@ This integration creates a customer-friendly deployment system where:
 To install the CaptiFi integration with PIN registration on your OpenWRT device, run the following command:
 
 ```bash
-curl -s https://raw.githubusercontent.com/captifi/captifi-openwrt/main/install.sh | sh
+wget -O - https://raw.githubusercontent.com/captifi/captifi-openwrt/main/install.sh | sh
 ```
 
 Unlike the standard version, this script does NOT prompt for a PIN during installation. Instead, it sets up a self-service activation system where customers will enter their PIN through the captive portal.
+
+Note: The installation script uses `wget` which is commonly available on OpenWRT devices.
 
 ## Requirements
 

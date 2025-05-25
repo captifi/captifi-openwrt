@@ -30,12 +30,12 @@ mkdir -p $INSTALL_DIR $CONFIG_DIR $SCRIPTS_DIR $WWW_DIR $CGI_DIR
 # Install required packages
 echo "Installing required packages..."
 opkg update
-opkg install curl nodogsplash bash uhttpd uhttpd-mod-cgi
+opkg install wget nodogsplash bash uhttpd uhttpd-mod-cgi
 
 # Download scripts from GitHub
 echo "Downloading scripts..."
 download_file() {
-  curl -s -o "$2" "$GITHUB_REPO/$1"
+  wget -q -O "$2" "$GITHUB_REPO/$1"
   chmod +x "$2"
   echo "Downloaded: $2"
 }
