@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptiFi Device Registration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            background-color: #0078d7;
+            color: white;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 0 0 5px 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+            letter-spacing: 3px;
+        }
+        button {
+            background-color: #0078d7;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #005fa3;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+        .instructions {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #0078d7;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CaptiFi Device Registration</h1>
+            <p>Enter your PIN to activate this device</p>
+        </div>
+        <div class="content">
+            <form id="pin-form" method="post" action="/cgi-bin/pin-register">
+                <div class="form-group">
+                    <label for="pin">Registration PIN:</label>
+                    <input type="text" id="pin" name="pin" placeholder="Enter your 8-digit PIN" maxlength="8" pattern="[0-9]{8}" required>
+                </div>
+                
+                <button type="submit">Activate Device</button>
+            </form>
+            
+            <div class="instructions">
+                <h3>Don't have a PIN?</h3>
+                <p>If you don't have a registration PIN, please contact your service provider or visit the CaptiFi customer portal to generate one.</p>
+            </div>
+            
+            <div class="footer">
+                <p>This device will provide WiFi services after activation.</p>
+                <p>Powered by CaptiFi</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple form validation
+        document.getElementById('pin-form').addEventListener('submit', function(e) {
+            var pin = document.getElementById('pin').value;
+            if(pin.length !== 8 || !/^\d+$/.test(pin)) {
+                e.preventDefault();
+                alert('Please enter a valid 8-digit PIN');
+                return false;
+            }
+        });
+    </script>
+</body>
+</html>
